@@ -6,6 +6,8 @@ enum AG_Op {
     AG_Op_Null,
     AG_Op_Add,
     AG_Op_Mul,
+    AG_Op_Exp,
+    AG_Op_Pow,
 };
 
 typedef struct AG_Value AG_Value;
@@ -31,7 +33,29 @@ struct AG_Value {
     AG_ChildListNode *last_child;
     U64 child_count;
 
-    B32 visited;
+    B32 visited; // Flag used internally by backward pass
+
+    union {
+        F64 k; // The exponent of a AG_Op_Pow operation 
+    };
 };
+
+//
+// Backprop Helper Structs
+//
+
+typedef struct AG_TopoListNode AG_TopoListNode;
+struct AG_TopoListNode {
+    AG_TopoListNode *next;
+    AG_TopoListNode *prev;
+
+    AG_Value *value;
+};
+
+typedef struct {
+    AG_TopoListNode *first;
+    AG_TopoListNode *last;
+} AG_TopoList;
+
 
 #endif

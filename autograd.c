@@ -4,12 +4,19 @@
 #include "autograd.h"
 
 #include <stdio.h>
+#include <math.h>
 
 void ag_push_child(Arena *arena, AG_Value *value, AG_Value *child) {
     AG_ChildListNode *node = push_array(arena, AG_ChildListNode, 1);
     node->child = child;
     MD_QueuePush(value->first_child, value->last_child, node);
     value->child_count += 1;
+}
+
+AG_Value *ag_leaf(Arena *arena, F64 value) {
+    AG_Value *result = push_array(arena, AG_Value, 1);
+    result->value = value;
+    return result;
 }
 
 AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b) {
@@ -36,20 +43,40 @@ AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b) {
     return result;
 }
 
-void ag_internal_backward(AG_Value *value);
+AG_Value *ag_exp(Arena *arena, AG_Value *x) {
+    AG_Value *result = push_array(arena, AG_Value, 1);
 
-typedef struct AG_TopoListNode AG_TopoListNode;
-struct AG_TopoListNode {
-    AG_TopoListNode *next;
-    AG_TopoListNode *prev;
+    result->operation = AG_Op_Exp;
+    result->value = exp(x->value);
 
-    AG_Value *value;
-};
+    ag_push_child(arena, result, x);
 
-typedef struct {
-    AG_TopoListNode *first;
-    AG_TopoListNode *last;
-} AG_TopoList;
+    return result;
+}
+
+AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
+    AG_Value *result = push_array(arena, AG_Value, 1);
+
+    result->operation = AG_Op_Pow;
+    result->value = exp(k * log(a->value));
+    result->k = k;
+
+    ag_push_child(arena, result, a);
+
+    return result;
+}
+
+AG_Value *ag_div(Arena *arena, AG_Value *a, AG_Value *b) {
+    return ag_mul(arena, a, ag_pow(arena, b, -1));
+}
+
+AG_Value *ag_neg(Arena *arena, AG_Value *a) {
+    return ag_mul(arena, a, ag_leaf(arena, -1));
+}
+
+AG_Value *ag_sub(Arena *arena, AG_Value *a, AG_Value *b) {
+    return ag_add(arena, a, ag_neg(arena, b));
+}
 
 void ag_build_topo(Arena *arena, AG_Value *value, AG_TopoList *list) {
     if (!value->visited) {
@@ -64,6 +91,8 @@ void ag_build_topo(Arena *arena, AG_Value *value, AG_TopoList *list) {
         MD_DblPushBack(list->first, list->last, topo_node);
     }
 }
+
+void ag_internal_backward(AG_Value *value);
 
 void ag_backward(AG_Value *value) {
     ArenaTemp scratch = scratch_begin(0,0);
@@ -108,6 +137,17 @@ void ag_internal_backward(AG_Value *value) {
 
         } break;
 
+        case AG_Op_Exp: {
+            AG_Value *child = value->first_child->child;
+            child->grad = value->grad * value->value;
+        } break;
+
+        case AG_Op_Pow: {
+            AG_Value *child = value->first_child->child;
+            F64 k = value->k;
+            child->grad = value->grad * k * exp( log(child->value) * (k-1) ); 
+        } break;
+
         default: {
             fprintf(stderr, "Unhandled AG_Op\n");
         } break;
@@ -118,16 +158,42 @@ void ag_internal_backward(AG_Value *value) {
 void test_nn(void) {
     ArenaTemp scratch = scratch_begin(0,0);
     
-    AG_Value *x = push_array(scratch.arena, AG_Value, 1);
-    x->value = 10;
+    {
+        AG_Value *x = push_array(scratch.arena, AG_Value, 1);
+        x->value = 10;
 
-    AG_Value *y = ag_mul(scratch.arena, x, x);
-    AG_Value *z = ag_add(scratch.arena, x, y);
+        AG_Value *y = ag_mul(scratch.arena, x, x);
+        AG_Value *z = ag_add(scratch.arena, x, y);
 
-    ag_backward(z);
+        ag_backward(z);
 
-    printf("dz/dx: %f\n", x->grad);
-    printf("dz/dy: %f\n", y->grad);
+        printf("dz/dx: %f\n", x->grad);
+        printf("dz/dy: %f\n", y->grad);
+    }
+
+    {
+        AG_Value *a = push_array(scratch.arena, AG_Value, 1);
+        a->value = 3;
+        AG_Value *b = ag_add(scratch.arena, a, a);
+        ag_backward(b);
+        printf("db/da: %f\n", a->grad);
+    }
+
+    {
+        AG_Value *x = ag_leaf(scratch.arena, 10);
+        AG_Value *z = ag_pow(scratch.arena, x, 3);
+        ag_backward(z);
+        printf("");
+    }
+
+    {
+        AG_Value *x = ag_leaf(scratch.arena, 10);
+        AG_Value *y = ag_leaf(scratch.arena, 20);
+        AG_Value *z = ag_div(scratch.arena, x, y);
+        ag_backward(z);
+        printf("");
+    }
+
 
     scratch_end(scratch);
 }
