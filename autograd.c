@@ -78,6 +78,14 @@ AG_Value *ag_sub(Arena *arena, AG_Value *a, AG_Value *b) {
     return ag_add(arena, a, ag_neg(arena, b));
 }
 
+AG_Value *ag_relu(Arena *arena, AG_Value *a) {
+    AG_Value *result = push_array(arena, AG_Value, 1);
+    result->operation = AG_Op_Relu;
+    result->value = a->value > 0 ? a->value : 0;
+    ag_push_child(arena, result, a);
+    return result;
+}
+
 void ag_build_topo(Arena *arena, AG_Value *value, AG_TopoList *list) {
     if (!value->visited) {
         value->visited = 1;
@@ -139,13 +147,18 @@ void ag_internal_backward(AG_Value *value) {
 
         case AG_Op_Exp: {
             AG_Value *child = value->first_child->child;
-            child->grad = value->grad * value->value;
+            child->grad += value->grad * value->value;
         } break;
 
         case AG_Op_Pow: {
             AG_Value *child = value->first_child->child;
             F64 k = value->k;
-            child->grad = value->grad * k * exp( log(child->value) * (k-1) ); 
+            child->grad += value->grad * k * exp( log(child->value) * (k-1) ); 
+        } break;
+
+        case AG_Op_Relu: {
+            AG_Value *child = value->first_child->child;
+            child->grad += value->grad * (child->value > 0);
         } break;
 
         default: {
@@ -153,6 +166,29 @@ void ag_internal_backward(AG_Value *value) {
         } break;
     }
 
+}
+
+typedef struct {
+    F64 *weights;
+    U64 weight_count;
+    F64 bias;
+    B32 has_activation;
+} AG_Neuron;
+
+AG_Value *ag_neuron(Arena *arena, AG_Neuron *neuron, AG_Value **xs, U64 x_count) {
+    MD_Assert(x_count == neuron->weight_count);
+    MD_Assert(x_count > 0);
+
+    AG_Value *result = ag_leaf(arena, neuron->bias);
+
+    for (int i = 0; i < x_count; ++i) {
+        AG_Value *weighted_x = ag_mul(arena, xs[i], ag_leaf(arena, neuron->weights[i]));
+        result = ag_add(arena, result, weighted_x);
+    }
+
+    if (neuron->has_activation) result = ag_relu(arena, result);
+
+    return result;
 }
 
 void test_nn(void) {
@@ -191,6 +227,44 @@ void test_nn(void) {
         AG_Value *y = ag_leaf(scratch.arena, 20);
         AG_Value *z = ag_div(scratch.arena, x, y);
         ag_backward(z);
+        printf("");
+    }
+
+    {
+        AG_Value *x = ag_leaf(scratch.arena, 10);
+        AG_Value *z = ag_relu(scratch.arena, x);
+        ag_backward(z);
+
+        x = ag_leaf(scratch.arena, 0);
+        z = ag_relu(scratch.arena, x);
+        ag_backward(z);
+
+        x = ag_leaf(scratch.arena, -10);
+        z = ag_relu(scratch.arena, x);
+        ag_backward(z);
+
+        printf("");
+    }
+
+    {
+        AG_Neuron *neuron = push_array(scratch.arena, AG_Neuron, 1);
+        neuron->bias = 3.0;
+        neuron->weight_count = 5;
+        neuron->weights = push_array(scratch.arena, F64, neuron->weight_count);
+        neuron->has_activation = 0;
+        for (int i = 0; i < neuron->weight_count; ++i) {
+            neuron->weights[i] = i * 10;
+        }
+
+        AG_Value **xs = push_array(scratch.arena, AG_Value*, neuron->weight_count);
+        for (int i = 0; i < neuron->weight_count; ++i) {
+            xs[i] = ag_leaf(scratch.arena, i + 1);
+        }
+
+        AG_Value *z = ag_neuron(scratch.arena, neuron, xs, neuron->weight_count);
+
+        ag_backward(z);
+
         printf("");
     }
 

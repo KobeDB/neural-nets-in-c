@@ -8,6 +8,7 @@ enum AG_Op {
     AG_Op_Mul,
     AG_Op_Exp,
     AG_Op_Pow,
+    AG_Op_Relu,
 };
 
 typedef struct AG_Value AG_Value;
