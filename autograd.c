@@ -3,6 +3,8 @@
 
 #include "autograd.h"
 
+#include "random.h"
+
 #include <stdio.h>
 #include <math.h>
 
@@ -169,24 +171,129 @@ void ag_internal_backward(AG_Value *value) {
 }
 
 typedef struct {
-    F64 *weights;
+    AG_Value **values;
+    U64 count;
+} AG_ValueList;
+
+typedef struct {
+    AG_Value **weights; // TODO: maybe allocate weight Values as a single contiguous array
     U64 weight_count;
-    F64 bias;
-    B32 has_activation;
+    AG_Value *bias;
+    B32 has_nonlin_activation;
 } AG_Neuron;
 
-AG_Value *ag_neuron(Arena *arena, AG_Neuron *neuron, AG_Value **xs, U64 x_count) {
-    MD_Assert(x_count == neuron->weight_count);
-    MD_Assert(x_count > 0);
+AG_Neuron *ag_make_neuron(Arena *arena, U64 input_dim, B32 has_nonlin_activation) {
+    AG_Neuron *result = push_array(arena, AG_Neuron, 1);
 
-    AG_Value *result = ag_leaf(arena, neuron->bias);
+    result->weights = push_array(arena, AG_Value*, input_dim);
+    result->weight_count = input_dim;
 
-    for (int i = 0; i < x_count; ++i) {
-        AG_Value *weighted_x = ag_mul(arena, xs[i], ag_leaf(arena, neuron->weights[i]));
+    static LCG rng = {0};
+    if (!rng.is_seeded) lcg_seed(&rng, 42);
+
+    for (int i = 0; i < input_dim; ++i) {
+        F64 r = lcg_next_range_f64(&rng, -1, 1);
+        result->weights[i] = ag_leaf(arena, r);
+    }
+
+    result->bias = ag_leaf(arena, 0);
+    result->has_nonlin_activation = has_nonlin_activation;
+
+    return result;
+}
+
+AG_ValueList ag_neuron_get_params(Arena *arena, AG_Neuron *neuron) {
+    AG_ValueList result = {0};
+
+    result.count = neuron->weight_count + 1; // +1 for the bias
+    result.values = push_array(arena, AG_Value*, result.count);
+    ArrayCopy(result.values, neuron->weights, neuron->weight_count);
+    result.values[neuron->weight_count] = neuron->bias;
+
+    return result;
+}
+
+AG_Value *ag_neuron_apply(Arena *arena, AG_Neuron *neuron, AG_ValueList x) {
+    MD_Assert(x.count == neuron->weight_count);
+    MD_Assert(x.count > 0);
+
+    AG_Value *result = neuron->bias;
+
+    for (int i = 0; i < x.count; ++i) {
+        AG_Value *weighted_x = ag_mul(arena, x.values[i], neuron->weights[i]);
         result = ag_add(arena, result, weighted_x);
     }
 
-    if (neuron->has_activation) result = ag_relu(arena, result);
+    if (neuron->has_nonlin_activation) result = ag_relu(arena, result);
+
+    return result;
+}
+
+typedef struct {
+    AG_Neuron **neurons;
+    U64 neuron_count;
+} AG_Layer;
+
+AG_Layer *ag_make_layer(Arena *arena, U64 input_dim, U64 output_dim, B32 has_nonlin_activation) {
+    AG_Layer *result = push_array(arena, AG_Layer, 1);
+
+    result->neuron_count = output_dim;
+    result->neurons = push_array(arena, AG_Neuron*, result->neuron_count);
+
+    for (int i = 0; i < result->neuron_count; ++i) {
+        result->neurons[i] = ag_make_neuron(arena, input_dim, has_nonlin_activation);
+    }
+
+    return result;
+}
+
+AG_ValueList ag_layer_get_params(Arena *arena, AG_Layer *layer) {
+    // TODO
+    return (AG_ValueList){0};
+}
+
+AG_ValueList ag_layer_apply(Arena *arena, AG_Layer *layer, AG_ValueList x) {
+    AG_ValueList result = {0};
+    result.values = push_array(arena, AG_Value*, layer->neuron_count);
+    result.count = layer->neuron_count;
+
+    for (int i = 0; i < layer->neuron_count; ++i) {
+        result.values[i] = ag_neuron_apply(arena, layer->neurons[i], x);
+    }
+
+    return result;
+}
+
+typedef struct {
+    AG_Layer **layers;
+    U64 layer_count;
+} AG_MLP;
+
+AG_MLP *ag_make_mlp(Arena *arena, U64 input_dim, U64 *layer_output_dims, U64 layer_count) {
+    AG_MLP *result = push_array(arena, AG_MLP, 1);
+
+    result->layers = push_array(arena, AG_Layer*, layer_count);
+    result->layer_count = layer_count;
+
+    for (int i = 0; i < layer_count; ++i) {
+        U64 layer_input_dim = ( i == 0 ? input_dim : layer_output_dims[i-1] );
+        B32 nonlin = ( i != layer_count-1 );
+        result->layers[i] = ag_make_layer(arena, layer_input_dim, layer_output_dims[i], nonlin);
+    }
+
+    return result;
+}
+
+AG_ValueList ag_mlp_apply(Arena *arena, AG_MLP *mlp, AG_ValueList x) {
+    Assert(mlp->layer_count > 0);
+    Assert(mlp->layers[0]->neuron_count > 0);
+    Assert(x.count == mlp->layers[0]->neurons[0]->weight_count);
+
+    AG_ValueList result = x;
+
+    for (int i = 0; i < mlp->layer_count; ++i) {
+        result = ag_layer_apply(arena, mlp->layers[i], result);
+    }
 
     return result;
 }
@@ -247,23 +354,25 @@ void test_nn(void) {
     }
 
     {
-        AG_Neuron *neuron = push_array(scratch.arena, AG_Neuron, 1);
-        neuron->bias = 3.0;
-        neuron->weight_count = 5;
-        neuron->weights = push_array(scratch.arena, F64, neuron->weight_count);
-        neuron->has_activation = 0;
-        for (int i = 0; i < neuron->weight_count; ++i) {
-            neuron->weights[i] = i * 10;
+        AG_MLP *mlp = 0;
+        {
+            ArenaTemp mlp_making_scratch = scratch_begin(&scratch.arena, 1);
+            U64 layer_count = 1;
+            U64 *layer_output_dims = push_array(mlp_making_scratch.arena, U64, layer_count);
+            layer_output_dims[0] = 2;
+            mlp = ag_make_mlp(scratch.arena, 2, layer_output_dims, layer_count);
+            scratch_end(mlp_making_scratch);
         }
 
-        AG_Value **xs = push_array(scratch.arena, AG_Value*, neuron->weight_count);
-        for (int i = 0; i < neuron->weight_count; ++i) {
-            xs[i] = ag_leaf(scratch.arena, i + 1);
+        F64 xvals[] = {1,2};
+        AG_ValueList x = {0};
+        x.count = ArrayCount(xvals);
+        x.values = push_array(scratch.arena, AG_Value*, x.count);
+        for (int i = 0; i < ArrayCount(xvals); ++i) {
+            x.values[i] = ag_leaf(scratch.arena, xvals[i]);
         }
 
-        AG_Value *z = ag_neuron(scratch.arena, neuron, xs, neuron->weight_count);
-
-        ag_backward(z);
+        AG_ValueList y = ag_mlp_apply(scratch.arena, mlp, x);
 
         printf("");
     }

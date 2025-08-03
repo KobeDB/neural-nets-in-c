@@ -77,4 +77,22 @@ typedef MD_ArenaTemp    ArenaTemp;
 #define SLLQueuePop(f,l)    MD_QueuePop(f,l)
 #define SLLStackPush(f,n)   MD_StackPush(f,n)
 
+//
+// Memory Ops
+//
+
+#define MemoryCopy(d,s,z) MD_MemoryCopy(d,s,z)
+
+#define ArrayCopy(d,s,c) do {\
+    for (int _aci = 0; _aci < (c); ++_aci ) (d)[_aci] = (s)[_aci];\
+} while (0)
+
+#define ArrayCount(a) MD_ArrayCount(a)
+
+//
+// Assert
+//
+
+#define Assert(c) MD_Assert(c)
+
 #endif
