@@ -60,7 +60,7 @@ AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
     result->operation = AG_Op_Pow;
-    result->value = exp(k * log(a->value));
+    result->value = pow(a->value, k);
     result->k = k;
 
     ag_push_child(arena, result, a);
@@ -134,17 +134,13 @@ void ag_internal_backward(AG_Value *value) {
         } break;
 
         case AG_Op_Mul: {
-            F64 product_of_child_values = 1;
-            for ( AG_ChildListNode *cur = value->first_child; cur != 0; cur = cur->next ) {
-                AG_Value *child = cur->child;
-                product_of_child_values *= child->value;
-            }
+            Assert(value->child_count == 2);
 
-            for ( AG_ChildListNode *cur = value->first_child; cur != 0; cur = cur->next ) {
-                AG_Value *child = cur->child;
-                child->grad += value->grad * product_of_child_values / child->value;
-            }
+            AG_Value *child_0 = value->first_child->child;
+            AG_Value *child_1 = value->last_child->child;
 
+            child_0->grad += value->grad * child_1->value;
+            child_1->grad += value->grad * child_0->value;
         } break;
 
         case AG_Op_Exp: {
@@ -155,7 +151,7 @@ void ag_internal_backward(AG_Value *value) {
         case AG_Op_Pow: {
             AG_Value *child = value->first_child->child;
             F64 k = value->k;
-            child->grad += value->grad * k * exp( log(child->value) * (k-1) ); 
+            child->grad += value->grad * k * pow(child->value, k-1); 
         } break;
 
         case AG_Op_Relu: {
@@ -247,9 +243,34 @@ AG_Layer *ag_make_layer(Arena *arena, U64 input_dim, U64 output_dim, B32 has_non
     return result;
 }
 
+U64 ag_layer_get_param_count(AG_Layer *layer) {
+    return layer->neuron_count > 0 ? (layer->neurons[0]->weight_count + 1) * layer->neuron_count : 0;
+}
+
 AG_ValueList ag_layer_get_params(Arena *arena, AG_Layer *layer) {
-    // TODO
-    return (AG_ValueList){0};
+    AG_ValueList result = {0};
+
+    ArenaTemp scratch = scratch_begin(&arena, 1);
+
+    if (layer->neuron_count > 0) {
+        U64 param_count = ag_layer_get_param_count(layer);
+        result.count = param_count;
+        result.values = push_array(arena, AG_Value*, result.count);
+
+        // Copy over each neuron's params into result.values
+        int param_i = 0;
+        for (int neuron_i = 0; neuron_i < layer->neuron_count; ++neuron_i) {
+            AG_ValueList neuron_params = ag_neuron_get_params(scratch.arena, layer->neurons[neuron_i]);
+            for (int i = 0; i < neuron_params.count; ++i) {
+                Assert(param_i < param_count); // Sanity check
+                result.values[param_i] = neuron_params.values[i];
+                param_i += 1;
+            }
+        }
+    }
+
+    scratch_end(scratch);
+    return result;
 }
 
 AG_ValueList ag_layer_apply(Arena *arena, AG_Layer *layer, AG_ValueList x) {
@@ -284,6 +305,33 @@ AG_MLP *ag_make_mlp(Arena *arena, U64 input_dim, U64 *layer_output_dims, U64 lay
     return result;
 }
 
+AG_ValueList ag_mlp_get_params(Arena *arena, AG_MLP *mlp) {
+    AG_ValueList result = {0};
+
+    ArenaTemp scratch = scratch_begin(&arena, 1);
+
+    U64 param_count = 0;
+    for (int i = 0; i < mlp->layer_count; ++i) {
+        param_count += ag_layer_get_param_count(mlp->layers[i]);
+    }
+
+    result.values = push_array(arena, AG_Value*, param_count);
+    result.count = param_count;
+
+    int param_i = 0;
+    for (int layer_i = 0; layer_i < mlp->layer_count; ++layer_i) {
+        AG_ValueList layer_params = ag_layer_get_params(scratch.arena, mlp->layers[layer_i]);
+        for (int i = 0; i < layer_params.count; ++i) {
+            Assert(param_i < param_count); // Sanity check
+            result.values[param_i] = layer_params.values[i];
+            param_i += 1;
+        }
+    }
+
+    scratch_end(scratch);
+    return result;
+}
+
 AG_ValueList ag_mlp_apply(Arena *arena, AG_MLP *mlp, AG_ValueList x) {
     Assert(mlp->layer_count > 0);
     Assert(mlp->layers[0]->neuron_count > 0);
@@ -293,6 +341,19 @@ AG_ValueList ag_mlp_apply(Arena *arena, AG_MLP *mlp, AG_ValueList x) {
 
     for (int i = 0; i < mlp->layer_count; ++i) {
         result = ag_layer_apply(arena, mlp->layers[i], result);
+    }
+
+    return result;
+}
+
+AG_ValueList ag_make_value_list(Arena *arena, F64 *values, U64 value_count) {
+    AG_ValueList result = {0};
+
+    result.count = value_count;
+    result.values = push_array(arena, AG_Value*, value_count);
+
+    for (int i = 0; i < value_count; ++i) {
+        result.values[i] = ag_leaf(arena, values[i]);
     }
 
     return result;
@@ -354,25 +415,76 @@ void test_nn(void) {
     }
 
     {
+        U64 input_dim = 3;
         AG_MLP *mlp = 0;
         {
             ArenaTemp mlp_making_scratch = scratch_begin(&scratch.arena, 1);
-            U64 layer_count = 1;
+            U64 layer_count = 3;
             U64 *layer_output_dims = push_array(mlp_making_scratch.arena, U64, layer_count);
-            layer_output_dims[0] = 2;
-            mlp = ag_make_mlp(scratch.arena, 2, layer_output_dims, layer_count);
+            layer_output_dims[0] = 4;
+            layer_output_dims[1] = 4;
+            layer_output_dims[2] = 1;
+            mlp = ag_make_mlp(scratch.arena, input_dim, layer_output_dims, layer_count);
             scratch_end(mlp_making_scratch);
         }
 
-        F64 xvals[] = {1,2};
-        AG_ValueList x = {0};
-        x.count = ArrayCount(xvals);
-        x.values = push_array(scratch.arena, AG_Value*, x.count);
-        for (int i = 0; i < ArrayCount(xvals); ++i) {
-            x.values[i] = ag_leaf(scratch.arena, xvals[i]);
-        }
+        F64 xvals[] = {
+            2,    3,  -1,
+            3,   -1,   0.5,
+            0.5,  1,   1,
+            1,    1,  -1
+        };
+        U64 sample_count = ArrayCount(xvals)/input_dim;
+        AG_ValueList *x = push_array(scratch.arena, AG_ValueList, sample_count);
+        for (int i = 0; i < sample_count; ++i) 
+            x[i] = ag_make_value_list(scratch.arena, &xvals[i * input_dim], input_dim);
 
-        AG_ValueList y = ag_mlp_apply(scratch.arena, mlp, x);
+        F64 yvals[] = {
+            1, -1, -1, 1
+        };
+
+        AG_ValueList y = ag_make_value_list(scratch.arena, yvals, ArrayCount(yvals));
+
+        for (int iter = 0; iter < 6; ++iter) {
+            ArenaTemp loss_scratch = scratch_begin(&scratch.arena, 1);
+            Arena *grad_desct_arena = loss_scratch.arena;
+
+            AG_ValueList *y_preds = push_array(grad_desct_arena, AG_ValueList, sample_count);
+
+            for (int i = 0; i < sample_count; ++i) {
+                y_preds[i] = ag_mlp_apply(grad_desct_arena, mlp, x[i]);
+            }
+
+            printf("y_pred: [");
+            for (int i = 0; i < sample_count; ++i) {
+                printf(" %f,", y_preds[i].values[0]->value);
+            }
+            printf("]\n");
+
+            AG_ValueList params = ag_mlp_get_params(grad_desct_arena, mlp);
+
+            for (int i = 0; i < params.count; ++i) {
+                params.values[i]->grad = 0;
+            }
+
+            AG_Value *loss = ag_leaf(grad_desct_arena, 0);
+            for (int i = 0; i < sample_count; ++i) {
+                AG_Value *y_pred = y_preds[i].values[0];
+                AG_Value *sample_loss = ag_pow(grad_desct_arena, ag_sub(grad_desct_arena, y_pred, y.values[i]), 2);
+                loss = ag_add(grad_desct_arena, loss, sample_loss);
+            }
+
+            printf("Loss: %f\n", loss->value);
+
+            ag_backward(loss);
+
+            for (int i = 0; i < params.count; ++i) {
+                AG_Value *param = params.values[i];
+                param->value -= 0.05 * param->grad;
+            }
+
+            scratch_end(loss_scratch);
+        }
 
         printf("");
     }
