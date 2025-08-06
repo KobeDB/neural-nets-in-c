@@ -446,8 +446,8 @@ void test_nn(void) {
         AG_ValueList y = ag_make_value_list(scratch.arena, yvals, ArrayCount(yvals));
 
         for (int iter = 0; iter < 6; ++iter) {
-            ArenaTemp loss_scratch = scratch_begin(&scratch.arena, 1);
-            Arena *grad_desct_arena = loss_scratch.arena;
+            ArenaTemp grad_desct_temp = temp_begin(scratch.arena);
+            Arena *grad_desct_arena = grad_desct_temp.arena;
 
             AG_ValueList *y_preds = push_array(grad_desct_arena, AG_ValueList, sample_count);
 
@@ -483,7 +483,7 @@ void test_nn(void) {
                 param->value -= 0.05 * param->grad;
             }
 
-            scratch_end(loss_scratch);
+            temp_end(grad_desct_temp);
         }
 
         printf("");
