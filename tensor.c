@@ -2,29 +2,27 @@
 
 static void print_coordinates(FILE *os, U32 *coords, U32 coord_count);
 
-Tensor *tensor_make_f64(Arena *arena, F64 *data, U64 element_count, U32 *shape, U32 ndims) {
+Tensor *tensor_make_view_f64(Arena *arena, F64 *data, U64 element_count, U32 *shape, U32 ndims) {
     Tensor *result = push_array(arena, Tensor, 1);
 
+    result->data = data;
+    
+    result->ndims = ndims;
+    result->shape = push_array(arena, U32, ndims);
+    result->strides = push_array(arena, U32, ndims);
+    
+    result->element_size = sizeof(double);
     result->type_hash = Tensor_TypeHash(double);
     result->type_name = S8FromType(double);
 
-    result->data = push_array(arena, F64, element_count);
-    ArrayCopy(((F64*)result->data), data, element_count);
-
-    result->shape = push_array(arena, U32, ndims);
     ArrayCopy(result->shape, shape, ndims);
 
-    result->strides = push_array(arena, U32, ndims);
     for (int i = 0; i < ndims; ++i) {
         result->strides[i] = 1;
         for (int j = i+1; j < ndims; ++j) {
             result->strides[i] *= shape[j];
         }
     }
-
-    result->ndims = ndims;
-
-    result->element_size = sizeof(double);
 
     return result;
 }

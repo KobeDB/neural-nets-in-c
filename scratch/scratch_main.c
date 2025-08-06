@@ -268,12 +268,12 @@ int main(void) {
     F64 xvals[] = {
         2,    3,  -1,
         3,   -1,   0.69,
-        0.42,  1,   1,
+        0.42,  420,   1,
         1,    1.69,  -1
     };
     U32 shape[] = {4, 3};
 
-    Tensor *t = tensor_make_f64(arena, xvals, ArrayCount(xvals), shape, ArrayCount(shape));
+    Tensor *t = tensor_make_view_f64(arena, xvals, ArrayCount(xvals), shape, ArrayCount(shape));
 
     U32 coords[] = {1, 2};
     F64 e0 = *(F64*)tensor_get(t, coords, ArrayCount(coords));

@@ -28,7 +28,7 @@ typedef struct {
 
 // --- Tensor View Creation -----------------------------------------------------------------
 
-Tensor *tensor_make_f64(Arena *arena, F64 *data, U64 element_count, U32 *shape, U32 ndims);
+Tensor *tensor_make_view_f64(Arena *arena, F64 *data, U64 element_count, U32 *shape, U32 ndims);
 
 // --- Accessors -----------------------------------------------------------------
 
