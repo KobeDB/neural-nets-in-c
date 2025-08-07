@@ -26,15 +26,21 @@ typedef struct {
     U32 end; // exclusive
 } RangeU32;
 
-// --- Tensor View Creation -----------------------------------------------------------------
+// --- Tensor (View) Creation -----------------------------------------------------------------
 
 Tensor *tensor_make_view_f64(Arena *arena, F64 *data, U64 element_count, U32 *shape, U32 ndims);
+
+// --- Tensor Cloning -----------------------------------------------------------------
+
+Tensor *tensor_clone(Arena *arena, Tensor *t);
 
 // --- Accessors -----------------------------------------------------------------
 
 void *tensor_get_unchecked(Tensor *tensor, U32 *coords, U32 coord_count);
 
 void *tensor_get(Tensor *tensor, U32 *coords, U32 coord_count);
+
+F64 *tensor_get_f64(Tensor *tensor, U32 *coords, U32 coord_count);
 
 // --- Tensor Tweaking ----------------------------------------------------------------- 
 
@@ -63,5 +69,14 @@ static inline U64 fnv1a_64(const char *str) {
 
 #define Tensor_TypeHash(T) fnv1a_64(#T)
 #define S8FromType(T) str8_lit(#T)
+
+// --- Arithmetic -----------------------------------------------------------------
+
+Tensor *tensor_add_f64(Arena *arena, Tensor *x, Tensor *y);
+
+// --- Helpers -----------------------------------------------------------------
+
+U32 *compute_contiguous_strides(Arena *arena, U32 *shape, U32 ndims);
+
 
 #endif

@@ -293,6 +293,13 @@ int main(void) {
 
     tensor_print_f64(stdout, tensor_squeeze(arena, t2));
 
+    Tensor *t3 = tensor_clone(arena, t);
+    U32 t3coords[] = {0,1};
+    *tensor_get_f64(t3, t3coords, ArrayCount(t3coords)) = 12345;
+    tensor_print_f64(stdout, t3);
+
+    tensor_print_f64(stdout, t);
+
 
     // HousePrices prices = {0};
 
