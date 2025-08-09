@@ -72,7 +72,7 @@ static inline U64 fnv1a_64(const char *str) {
 
 // --- Arithmetic -----------------------------------------------------------------
 
-Tensor *tensor_add_f64(Arena *arena, Tensor *x, Tensor *y);
+Tensor *tensor_add(Arena *arena, Tensor *x, Tensor *y);
 
 // --- Helpers -----------------------------------------------------------------
 

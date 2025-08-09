@@ -300,6 +300,26 @@ int main(void) {
 
     tensor_print_f64(stdout, t);
 
+    F64 a_vals[] = {
+        1,2,3,
+        4,5,6
+    };
+    U32 a_shape[] = {2,3};
+
+    Tensor *a = tensor_make_view_f64(arena, a_vals, ArrayCount(a_vals), a_shape, ArrayCount(a_shape));
+
+    F64 b_vals[] = {
+        10,20,30,
+        40,50,60
+    };
+    U32 b_shape[] = {2,3};
+
+    Tensor *b = tensor_make_view_f64(arena, b_vals, ArrayCount(b_vals), b_shape, ArrayCount(b_shape));
+
+    Tensor *s0 = tensor_add(arena, a, b);
+
+    tensor_print_f64(stdout, s0);
+
 
     // HousePrices prices = {0};
 

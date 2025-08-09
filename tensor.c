@@ -230,14 +230,12 @@ Tensor *tensor_clone(Arena *arena, Tensor *t) {
     if (element_count > 0) {
         U32 *cur_coords = push_array(scratch.arena, U32, t->ndims);
         U64 element_idx = 0;
-        B32 cur_coords_valid = 1;
-        while (cur_coords_valid) {
+        do {
             void *src = tensor_get(t, cur_coords, t->ndims);
             void *dest = (char*)cloned_data + (element_idx * t->element_size);
             MemoryCopy(dest, src, t->element_size);
             ++element_idx;
-            cur_coords_valid = coord_iter_next(cur_coords, t->shape, t->ndims);
-        }
+        } while (coord_iter_next(cur_coords, t->shape, t->ndims));
     }
     
     Tensor *result = push_array(arena, Tensor, 1);
@@ -260,8 +258,57 @@ Tensor *tensor_clone(Arena *arena, Tensor *t) {
     return result;
 }
 
-Tensor *tensor_add_f64(Arena *arena, Tensor *x, Tensor *y) {
-    Tensor *result = tensor_clone(arena, x);
-    // TODO
-    return result;
+B32 tensor_shapes_match(Tensor *x, Tensor *y) {
+    if (x->ndims != y->ndims) return 0;
+    for (int i = 0; i < x->ndims; ++i) if (x->shape[i] != y->shape[i]) return 0;
+    return 1;
 }
+
+// This push_array wrapper is defined for safe use in the DEFINE_TENSOR_ADD macro
+// (I have PTSD of calling macros inside macros)
+static inline U32 *_push_zero_coord(Arena *arena, U32 count) {
+    return push_array(arena, U32, count);
+}
+
+#define DEFINE_TENSOR_ADD(T, TensorAddFuncName) \
+Tensor *TensorAddFuncName(Arena *arena, Tensor *x, Tensor *y) { \
+    /* TODO: prefer cloning the tensor with contiguous memory */ \
+    Tensor *to_clone = x; \
+    Tensor *other = (to_clone == x ? y : x); \
+    Tensor *result = tensor_clone(arena, to_clone); \
+    if (tensor_element_count(result) > 0) { \
+        U32 *cur_coord = _push_zero_coord(arena, result->ndims); \
+        do { \
+            /* TODO: use tensor_get_unchecked for SPEED */ \
+            *(T*)tensor_get(result, cur_coord, result->ndims) += *(T*)tensor_get(other, cur_coord, result->ndims); \
+        } while(coord_iter_next(cur_coord, result->shape, result->ndims)); \
+    } \
+    return result;\
+}
+
+DEFINE_TENSOR_ADD(F64, tensor_add_f64)
+DEFINE_TENSOR_ADD(S32, tensor_add_s32)
+
+Tensor *tensor_add(Arena *arena, Tensor *x, Tensor *y) {
+
+    if (!tensor_shapes_match(x, y)) {
+        fprintf(stderr, "tensor_add: addition of tensors of differing shapes is not supported\n");
+        return 0;
+    }
+
+    // TODO: pre-compute primitive type hashes in these comparisons
+    if (x->type_hash == Tensor_TypeHash(double)) {
+        return tensor_add_f64(arena, x, y);
+    }
+    else if (x->type_hash == Tensor_TypeHash(uint32_t)) {
+        return tensor_add_s32(arena, x, y);
+    }
+    else {
+        fprintf(stderr, "tensor_add: addition not supported for element type: ", str8_varg(x->type_name));
+        return 0;
+    }
+
+    return 0;
+}
+
+
