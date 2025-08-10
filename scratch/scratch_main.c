@@ -278,7 +278,7 @@ int main(void) {
     U32 coords[] = {1, 2};
     F64 e0 = *(F64*)tensor_get(t, coords, ArrayCount(coords));
 
-    tensor_print_f64(stdout, t);
+    tensor_print(t);
     printf("\n");
 
     RangeU32 ranges[] = {
@@ -288,17 +288,17 @@ int main(void) {
 
     Tensor *t2 = tensor_slice(arena, t, ranges, ArrayCount(ranges));
 
-    tensor_print_f64(stdout, t2);
+    tensor_print(t2);
     printf("\n");
 
-    tensor_print_f64(stdout, tensor_squeeze(arena, t2));
+    tensor_print(tensor_squeeze(arena, t2));
 
     Tensor *t3 = tensor_clone(arena, t);
     U32 t3coords[] = {0,1};
     *tensor_get_f64(t3, t3coords, ArrayCount(t3coords)) = 12345;
-    tensor_print_f64(stdout, t3);
+    tensor_fprint(stdout, t3);
 
-    tensor_print_f64(stdout, t);
+    tensor_fprint(stdout, t);
 
     F64 a_vals[] = {
         1,2,3,
@@ -318,8 +318,17 @@ int main(void) {
 
     Tensor *s0 = tensor_add(arena, a, b);
 
-    tensor_print_f64(stdout, s0);
+    tensor_print(s0);
 
+    S32 c_vals[] = {
+        -1, -2, -3,
+        -4, -5, -6
+    };
+    U32 c_shape[] = {2,3};
+
+    Tensor *c = tensor_make_view_s32(arena, c_vals, ArrayCount(c_vals), c_shape, ArrayCount(c_shape));
+
+    tensor_print(c);
 
     // HousePrices prices = {0};
 

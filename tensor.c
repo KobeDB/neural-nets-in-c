@@ -20,6 +20,24 @@ Tensor *tensor_make_view_f64(Arena *arena, F64 *data, U64 element_count, U32 *sh
     return result;
 }
 
+Tensor *tensor_make_view_s32(Arena *arena, S32 *data, U64 element_count, U32 *shape, U32 ndims) {
+    Tensor *result = push_array(arena, Tensor, 1);
+
+    result->data = data;
+    
+    result->ndims = ndims;
+    result->shape = push_array(arena, U32, ndims);
+    result->strides = compute_contiguous_strides(arena, shape, ndims);
+    
+    result->element_size = sizeof(uint32_t);
+    result->type_hash = Tensor_TypeHash(uint32_t);
+    result->type_name = S8FromType(uint32_t);
+
+    ArrayCopy(result->shape, shape, ndims);
+
+    return result;
+}
+
 void *tensor_get_unchecked(Tensor *tensor, U32 *coords, U32 coord_count) {
     
     U64 offset = 0;
@@ -131,7 +149,8 @@ static void print_indent(FILE *os, int level) {
     }
 }
 
-void tensor_print_recursive_f64(FILE *os, Tensor *tensor, U32 dim, U32 *coords, U32 coord_count) {
+
+void tensor_fprint_recursive(FILE *os, Tensor *tensor, U32 dim, U32 *coords, U32 coord_count, TensorElementPrintFunc *print_func) {
     ArenaTemp scratch = scratch_begin(0,0);
 
     print_indent(os, dim);
@@ -146,9 +165,10 @@ void tensor_print_recursive_f64(FILE *os, Tensor *tensor, U32 dim, U32 *coords, 
         new_coords[new_coord_count-1] = i;
 
         if (dim >= tensor->ndims-1) {
-            printf("%f, ", *(F64*)tensor_get(tensor, new_coords, new_coord_count));
+            print_func(os, tensor_get(tensor, new_coords, new_coord_count));
+            fprintf(os, ", ");
         } else {
-            tensor_print_recursive_f64(os, tensor, dim+1, new_coords, new_coord_count);
+            tensor_fprint_recursive(os, tensor, dim+1, new_coords, new_coord_count, print_func);
         }
     }
 
@@ -163,13 +183,37 @@ void tensor_print_recursive_f64(FILE *os, Tensor *tensor, U32 dim, U32 *coords, 
     scratch_end(scratch);
 }
 
-void tensor_print_f64(FILE *os, Tensor *tensor) {
+void tensor_fprint_custom(FILE *os, Tensor *tensor, TensorElementPrintFunc *print_func) {
     fprintf(os, "Tensor { \n");
     fprintf(os, "Shape: ");
     print_coordinates(os, tensor->shape, tensor->ndims);
     fprintf(os, "\n");
-    tensor_print_recursive_f64(os, tensor, 0, 0, 0);
+    tensor_fprint_recursive(os, tensor, 0, 0, 0, print_func);
     fprintf(os, "\n}");
+}
+
+static inline void tensor_element_print_func_f64(FILE *os, void *element) {
+    fprintf(os, "%f", *(F64*)element);
+}
+
+static inline void tensor_element_print_func_s32(FILE *os, void *element) {
+    fprintf(os, "%d", *(S32*)element);
+}
+
+void tensor_fprint(FILE *os, Tensor *tensor) {
+    if (tensor->type_hash == Tensor_TypeHash(double)) {
+        tensor_fprint_custom(os, tensor, tensor_element_print_func_f64);
+    }
+    else if (tensor->type_hash == Tensor_TypeHash(uint32_t)) {
+        tensor_fprint_custom(os, tensor, tensor_element_print_func_s32);
+    }
+    else {
+        fprintf(stderr, "tensor_print: element type %.*s not supported\n", str8_varg(tensor->type_name));
+    }
+}
+
+void tensor_print(Tensor *tensor) {
+    tensor_fprint(stdout, tensor);
 }
 
 static void print_coordinates(FILE *os, U32 *coords, U32 coord_count) {
@@ -258,36 +302,38 @@ Tensor *tensor_clone(Arena *arena, Tensor *t) {
     return result;
 }
 
+
 B32 tensor_shapes_match(Tensor *x, Tensor *y) {
     if (x->ndims != y->ndims) return 0;
     for (int i = 0; i < x->ndims; ++i) if (x->shape[i] != y->shape[i]) return 0;
     return 1;
 }
 
-// This push_array wrapper is defined for safe use in the DEFINE_TENSOR_ADD macro
-// (I have PTSD of calling macros inside macros)
-static inline U32 *_push_zero_coord(Arena *arena, U32 count) {
-    return push_array(arena, U32, count);
+
+static inline void tensor_element_add_func_f64(void *dest, void *to_add) {
+    *(F64*)dest += *(F64*)to_add;
 }
 
-#define DEFINE_TENSOR_ADD(T, TensorAddFuncName) \
-Tensor *TensorAddFuncName(Arena *arena, Tensor *x, Tensor *y) { \
-    /* TODO: prefer cloning the tensor with contiguous memory */ \
-    Tensor *to_clone = x; \
-    Tensor *other = (to_clone == x ? y : x); \
-    Tensor *result = tensor_clone(arena, to_clone); \
-    if (tensor_element_count(result) > 0) { \
-        U32 *cur_coord = _push_zero_coord(arena, result->ndims); \
-        do { \
-            /* TODO: use tensor_get_unchecked for SPEED */ \
-            *(T*)tensor_get(result, cur_coord, result->ndims) += *(T*)tensor_get(other, cur_coord, result->ndims); \
-        } while(coord_iter_next(cur_coord, result->shape, result->ndims)); \
-    } \
-    return result;\
+static inline void tensor_element_add_func_s32(void *dest, void *to_add) {
+    *(S32*)dest += *(S32*)to_add;
 }
 
-DEFINE_TENSOR_ADD(F64, tensor_add_f64)
-DEFINE_TENSOR_ADD(S32, tensor_add_s32)
+Tensor *tensor_add_custom(Arena *arena, Tensor *x, Tensor *y, TensorElementAddFunc *add_func) {
+    /* TODO: prefer cloning the tensor with contiguous memory */
+    Tensor *to_clone = x;
+    Tensor *other = (to_clone == x ? y : x);
+    Tensor *result = tensor_clone(arena, to_clone);
+    if (tensor_element_count(result) > 0) {
+        U32 *cur_coord = push_array(arena, U32, result->ndims);
+        do {
+            /* TODO: use tensor_get_unchecked for SPEED */
+            void *dest = tensor_get(result, cur_coord, result->ndims);
+            void *to_add = tensor_get(other, cur_coord, result->ndims);
+            add_func(dest, to_add);
+        } while(coord_iter_next(cur_coord, result->shape, result->ndims));
+    } 
+    return result;
+}
 
 Tensor *tensor_add(Arena *arena, Tensor *x, Tensor *y) {
 
@@ -298,13 +344,14 @@ Tensor *tensor_add(Arena *arena, Tensor *x, Tensor *y) {
 
     // TODO: pre-compute primitive type hashes in these comparisons
     if (x->type_hash == Tensor_TypeHash(double)) {
-        return tensor_add_f64(arena, x, y);
+        return tensor_add_custom(arena, x, y, tensor_element_add_func_f64);
     }
     else if (x->type_hash == Tensor_TypeHash(uint32_t)) {
-        return tensor_add_s32(arena, x, y);
+        return tensor_add_custom(arena, x, y, tensor_element_add_func_s32);
     }
     else {
-        fprintf(stderr, "tensor_add: addition not supported for element type: ", str8_varg(x->type_name));
+        fprintf(stderr, "tensor_add: addition not supported for element type: %.*s\n", str8_varg(x->type_name));
+        fprintf(stderr, "HINT: Call tensor_add_custom with your custom element add function instead.\n");
         return 0;
     }
 
