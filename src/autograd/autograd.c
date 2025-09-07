@@ -4,7 +4,7 @@
 #include <math.h>
 
 internal
-void ag_push_child(Arena *arena, AG_Value *value, AG_Value *pred) {
+void ag_push_predecessor(Arena *arena, AG_Value *value, AG_Value *pred) {
     AG_PredecessorNode *node = push_array(arena, AG_PredecessorNode, 1);
     node->value = pred;
     SLLQueuePush(value->predecessors.first, value->predecessors.last, node);
@@ -26,8 +26,8 @@ AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b) {
     result->type = AG_ValueType_Add;
     result->value = a->value + b->value;
 
-    ag_push_child(arena, result, a);
-    ag_push_child(arena, result, b);
+    ag_push_predecessor(arena, result, a);
+    ag_push_predecessor(arena, result, b);
 
     return result;
 }
@@ -39,8 +39,8 @@ AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b) {
     result->type = AG_ValueType_Mul;
     result->value = a->value * b->value;
 
-    ag_push_child(arena, result, a);
-    ag_push_child(arena, result, b);
+    ag_push_predecessor(arena, result, a);
+    ag_push_predecessor(arena, result, b);
 
     return result;
 }
@@ -52,7 +52,7 @@ AG_Value *ag_exp(Arena *arena, AG_Value *x) {
     result->type = AG_ValueType_Exp;
     result->value = exp(x->value);
 
-    ag_push_child(arena, result, x);
+    ag_push_predecessor(arena, result, x);
 
     return result;
 }
@@ -65,7 +65,7 @@ AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
     result->value = pow(a->value, k);
     result->op_params.k = k;
 
-    ag_push_child(arena, result, a);
+    ag_push_predecessor(arena, result, a);
 
     return result;
 }
@@ -90,7 +90,7 @@ AG_Value *ag_relu(Arena *arena, AG_Value *a) {
     AG_Value *result = push_array(arena, AG_Value, 1);
     result->type = AG_ValueType_Relu;
     result->value = a->value > 0 ? a->value : 0;
-    ag_push_child(arena, result, a);
+    ag_push_predecessor(arena, result, a);
     return result;
 }
 
@@ -108,9 +108,6 @@ void ag_build_topo(Arena *arena, AG_Value *value, AG_TopoList *list) {
         DLLPushBack(list->first, list->last, topo_node);
     }
 }
-
-internal
-void ag_internal_backward(AG_Value *value);
 
 internal
 void ag_backward(AG_Value *value) {
@@ -132,7 +129,6 @@ void ag_backward(AG_Value *value) {
 
 internal
 void ag_internal_backward(AG_Value *value) {
-    
     switch (value->type) {
         case AG_ValueType_Null: {
             fprintf(stderr, "ag_internal_backward called on uninitialized value of type AG_ValueType_Null");
@@ -150,34 +146,33 @@ void ag_internal_backward(AG_Value *value) {
         case AG_ValueType_Mul: {
             Assert(value->predecessors.count == 2);
 
-            AG_Value *child_0 = value->predecessors.first->value;
-            AG_Value *child_1 = value->predecessors.last->value;
+            AG_Value *pred_1 = value->predecessors.first->value;
+            AG_Value *pred_2 = value->predecessors.last->value;
 
-            child_0->grad += value->grad * child_1->value;
-            child_1->grad += value->grad * child_0->value;
+            pred_1->grad += value->grad * pred_2->value;
+            pred_2->grad += value->grad * pred_1->value;
         } break;
 
         case AG_ValueType_Exp: {
-            AG_Value *child = value->predecessors.first->value;
-            child->grad += value->grad * value->value;
+            AG_Value *pred = value->predecessors.first->value;
+            pred->grad += value->grad * value->value;
         } break;
 
         case AG_ValueType_Pow: {
-            AG_Value *child = value->predecessors.first->value;
+            AG_Value *pred = value->predecessors.first->value;
             F64 k = value->op_params.k;
-            child->grad += value->grad * k * pow(child->value, k-1); 
+            pred->grad += value->grad * k * pow(pred->value, k-1); 
         } break;
 
         case AG_ValueType_Relu: {
-            AG_Value *child = value->predecessors.first->value;
-            child->grad += value->grad * (child->value > 0);
+            AG_Value *pred = value->predecessors.first->value;
+            pred->grad += value->grad * (pred->value > 0);
         } break;
 
         default: {
             fprintf(stderr, "ag_internal_backward: unhandled AG_ValueType\n");
         } break;
     }
-
 }
 
 typedef struct {

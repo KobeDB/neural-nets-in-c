@@ -40,7 +40,7 @@ struct AG_Value {
     B32 visited; // Flag used internally by backward pass
 
     union {
-        F64 k; // The exponent of a AG_Op_Pow operation 
+        F64 k; // The exponent of a AG_ValueType_Pow operation 
     } op_params;
 };
 
@@ -67,6 +67,33 @@ internal AG_Value *ag_source(Arena *arena, F64 value);
 
 internal AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b);
 
+internal AG_Value *ag_sub(Arena *arena, AG_Value *a, AG_Value *b);
+
 internal AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b);
+
+internal AG_Value *ag_div(Arena *arena, AG_Value *a, AG_Value *b);
+
+internal AG_Value *ag_neg(Arena *arena, AG_Value *a);
+
+internal AG_Value *ag_relu(Arena *arena, AG_Value *a);
+
+internal AG_Value *ag_exp(Arena *arena, AG_Value *x);
+
+internal AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k);
+
+// ==================================
+// Backprop functions
+
+internal void ag_backward(AG_Value *value);
+
+internal void ag_internal_backward(AG_Value *value);
+
+// ==================================
+// Helpers
+
+internal void ag_push_predecessor(Arena *arena, AG_Value *value, AG_Value *pred);
+
+internal void ag_build_topo(Arena *arena, AG_Value *value, AG_TopoList *list);
+
 
 #endif
