@@ -1,15 +1,16 @@
 #ifndef AUTOGRAD_H
 #define AUTOGRAD_H
 
-enum AG_Op {
-    AG_Op_Null,
-    AG_Op_Add,
-    AG_Op_Mul,
-    AG_Op_Exp,
-    AG_Op_Pow,
-    AG_Op_Relu,
+enum AG_ValueType {
+    AG_ValueType_Null,
+    AG_ValueType_Source,
+    AG_ValueType_Add,
+    AG_ValueType_Mul,
+    AG_ValueType_Exp,
+    AG_ValueType_Pow,
+    AG_ValueType_Relu,
 };
-typedef enum AG_Op AG_Op;
+typedef enum AG_ValueType AG_ValueType;
 
 // NOTE: Since a single AG_Value can occur multiple times in a children list,
 //       we can't store the links of the child list in AG_Value itself 
@@ -24,7 +25,7 @@ struct AG_ChildListNode {
 typedef struct AG_Value AG_Value;
 struct AG_Value {
     F64 value;
-    AG_Op operation;
+    AG_ValueType type;
 
     F64 grad;
 
@@ -56,5 +57,10 @@ typedef struct {
     AG_TopoListNode *last;
 } AG_TopoList;
 
+
+// ==================================
+// Value construction functions
+
+AG_Value *ag_source(Arena *arena, F64 value);
 
 #endif

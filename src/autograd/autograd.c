@@ -10,8 +10,9 @@ void ag_push_child(Arena *arena, AG_Value *value, AG_Value *child) {
     value->child_count += 1;
 }
 
-AG_Value *ag_leaf(Arena *arena, F64 value) {
+AG_Value *ag_source(Arena *arena, F64 value) {
     AG_Value *result = push_array(arena, AG_Value, 1);
+    result->type = AG_ValueType_Source;
     result->value = value;
     return result;
 }
@@ -19,7 +20,7 @@ AG_Value *ag_leaf(Arena *arena, F64 value) {
 AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
-    result->operation = AG_Op_Add;
+    result->type = AG_ValueType_Add;
     result->value = a->value + b->value;
 
     ag_push_child(arena, result, a);
@@ -31,7 +32,7 @@ AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b) {
 AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
-    result->operation = AG_Op_Mul;
+    result->type = AG_ValueType_Mul;
     result->value = a->value * b->value;
 
     ag_push_child(arena, result, a);
@@ -43,7 +44,7 @@ AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b) {
 AG_Value *ag_exp(Arena *arena, AG_Value *x) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
-    result->operation = AG_Op_Exp;
+    result->type = AG_ValueType_Exp;
     result->value = exp(x->value);
 
     ag_push_child(arena, result, x);
@@ -54,7 +55,7 @@ AG_Value *ag_exp(Arena *arena, AG_Value *x) {
 AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
-    result->operation = AG_Op_Pow;
+    result->type = AG_ValueType_Pow;
     result->value = pow(a->value, k);
     result->op_params.k = k;
 
@@ -68,7 +69,7 @@ AG_Value *ag_div(Arena *arena, AG_Value *a, AG_Value *b) {
 }
 
 AG_Value *ag_neg(Arena *arena, AG_Value *a) {
-    return ag_mul(arena, a, ag_leaf(arena, -1));
+    return ag_mul(arena, a, ag_source(arena, -1));
 }
 
 AG_Value *ag_sub(Arena *arena, AG_Value *a, AG_Value *b) {
@@ -77,7 +78,7 @@ AG_Value *ag_sub(Arena *arena, AG_Value *a, AG_Value *b) {
 
 AG_Value *ag_relu(Arena *arena, AG_Value *a) {
     AG_Value *result = push_array(arena, AG_Value, 1);
-    result->operation = AG_Op_Relu;
+    result->type = AG_ValueType_Relu;
     result->value = a->value > 0 ? a->value : 0;
     ag_push_child(arena, result, a);
     return result;
@@ -118,17 +119,21 @@ void ag_backward(AG_Value *value) {
 
 void ag_internal_backward(AG_Value *value) {
     
-    switch (value->operation) {
-        case AG_Op_Null: break;
+    switch (value->type) {
+        case AG_ValueType_Null: {
+            fprintf(stderr, "ag_internal_backward called on uninitialized value of type AG_ValueType_Null");
+        } break;
 
-        case AG_Op_Add: {
+        case AG_ValueType_Source: break; // nothing to do
+
+        case AG_ValueType_Add: {
             for ( AG_ChildListNode *cur = value->first_child; cur != 0; cur = cur->next ) {
                 AG_Value *child = cur->child;
                 child->grad += value->grad;
             }
         } break;
 
-        case AG_Op_Mul: {
+        case AG_ValueType_Mul: {
             Assert(value->child_count == 2);
 
             AG_Value *child_0 = value->first_child->child;
@@ -138,24 +143,24 @@ void ag_internal_backward(AG_Value *value) {
             child_1->grad += value->grad * child_0->value;
         } break;
 
-        case AG_Op_Exp: {
+        case AG_ValueType_Exp: {
             AG_Value *child = value->first_child->child;
             child->grad += value->grad * value->value;
         } break;
 
-        case AG_Op_Pow: {
+        case AG_ValueType_Pow: {
             AG_Value *child = value->first_child->child;
             F64 k = value->op_params.k;
             child->grad += value->grad * k * pow(child->value, k-1); 
         } break;
 
-        case AG_Op_Relu: {
+        case AG_ValueType_Relu: {
             AG_Value *child = value->first_child->child;
             child->grad += value->grad * (child->value > 0);
         } break;
 
         default: {
-            fprintf(stderr, "Unhandled AG_Op\n");
+            fprintf(stderr, "ag_internal_backward: unhandled AG_ValueType\n");
         } break;
     }
 
@@ -184,10 +189,10 @@ AG_Neuron *ag_make_neuron(Arena *arena, U64 input_dim, B32 has_nonlin_activation
 
     for (int i = 0; i < input_dim; ++i) {
         F64 r = lcg_next_range_f64(&rng, -1, 1);
-        result->weights[i] = ag_leaf(arena, r);
+        result->weights[i] = ag_source(arena, r);
     }
 
-    result->bias = ag_leaf(arena, 0);
+    result->bias = ag_source(arena, 0);
     result->has_nonlin_activation = has_nonlin_activation;
 
     return result;
@@ -348,7 +353,7 @@ AG_ValueList ag_make_value_list(Arena *arena, F64 *values, U64 value_count) {
     result.values = push_array(arena, AG_Value*, value_count);
 
     for (int i = 0; i < value_count; ++i) {
-        result.values[i] = ag_leaf(arena, values[i]);
+        result.values[i] = ag_source(arena, values[i]);
     }
 
     return result;
@@ -379,30 +384,30 @@ void run_neural_network_things(void) {
     }
 
     {
-        AG_Value *x = ag_leaf(scratch.arena, 10);
+        AG_Value *x = ag_source(scratch.arena, 10);
         AG_Value *z = ag_pow(scratch.arena, x, 3);
         ag_backward(z);
         printf("");
     }
 
     {
-        AG_Value *x = ag_leaf(scratch.arena, 10);
-        AG_Value *y = ag_leaf(scratch.arena, 20);
+        AG_Value *x = ag_source(scratch.arena, 10);
+        AG_Value *y = ag_source(scratch.arena, 20);
         AG_Value *z = ag_div(scratch.arena, x, y);
         ag_backward(z);
         printf("");
     }
 
     {
-        AG_Value *x = ag_leaf(scratch.arena, 10);
+        AG_Value *x = ag_source(scratch.arena, 10);
         AG_Value *z = ag_relu(scratch.arena, x);
         ag_backward(z);
 
-        x = ag_leaf(scratch.arena, 0);
+        x = ag_source(scratch.arena, 0);
         z = ag_relu(scratch.arena, x);
         ag_backward(z);
 
-        x = ag_leaf(scratch.arena, -10);
+        x = ag_source(scratch.arena, -10);
         z = ag_relu(scratch.arena, x);
         ag_backward(z);
 
@@ -462,7 +467,7 @@ void run_neural_network_things(void) {
                 params.values[i]->grad = 0;
             }
 
-            AG_Value *loss = ag_leaf(grad_desct_arena, 0);
+            AG_Value *loss = ag_source(grad_desct_arena, 0);
             for (int i = 0; i < sample_count; ++i) {
                 AG_Value *y_pred = y_preds[i].values[0];
                 AG_Value *sample_loss = ag_pow(grad_desct_arena, ag_sub(grad_desct_arena, y_pred, y.values[i]), 2);
