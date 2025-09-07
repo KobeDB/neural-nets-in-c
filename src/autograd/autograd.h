@@ -45,6 +45,27 @@ struct AG_Value {
 };
 
 // ==================================
+// AG_Value "tensor" types
+
+typedef struct AG_ValueArray AG_ValueArray;
+struct AG_ValueArray {
+    AG_Value **values;
+    int count;
+};
+
+typedef struct AG_ValueArray3D AG_ValueArray3D;
+struct AG_ValueArray3D {
+    AG_Value **values;
+    int shape[3];
+};
+
+typedef struct AG_ValueArray4D AG_ValueArray4D;
+struct AG_ValueArray4D {
+    AG_Value **values;
+    int shape[4];
+};
+
+// ==================================
 // Backprop helper structs
 
 typedef struct AG_TopoListNode AG_TopoListNode;
@@ -89,7 +110,14 @@ internal void ag_backward(AG_Value *value);
 internal void ag_internal_backward(AG_Value *value);
 
 // ==================================
-// Helpers
+// Value "tensor" helpers
+
+internal AG_ValueArray ag_value_array_from_raw(Arena *arena, F64 *values, U64 value_count);
+
+internal AG_ValueArray ag_make_zero_value_array(Arena *arena, int count); 
+
+// ==================================
+// Private helpers
 
 internal void ag_push_predecessor(Arena *arena, AG_Value *value, AG_Value *pred);
 
