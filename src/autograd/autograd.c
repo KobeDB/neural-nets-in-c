@@ -1,8 +1,3 @@
-#include "md.h"
-#include "md_alias.h"
-
-#include "autograd.h"
-
 #include "random.h"
 
 #include <stdio.h>
@@ -61,7 +56,7 @@ AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
 
     result->operation = AG_Op_Pow;
     result->value = pow(a->value, k);
-    result->k = k;
+    result->op_params.k = k;
 
     ag_push_child(arena, result, a);
 
@@ -150,7 +145,7 @@ void ag_internal_backward(AG_Value *value) {
 
         case AG_Op_Pow: {
             AG_Value *child = value->first_child->child;
-            F64 k = value->k;
+            F64 k = value->op_params.k;
             child->grad += value->grad * k * pow(child->value, k-1); 
         } break;
 
@@ -359,7 +354,7 @@ AG_ValueList ag_make_value_list(Arena *arena, F64 *values, U64 value_count) {
     return result;
 }
 
-void test_nn(void) {
+void run_neural_network_things(void) {
     ArenaTemp scratch = scratch_begin(0,0);
     
     {

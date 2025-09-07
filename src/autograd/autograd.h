@@ -1,7 +1,6 @@
 #ifndef AUTOGRAD_H
 #define AUTOGRAD_H
 
-typedef enum AG_Op AG_Op;
 enum AG_Op {
     AG_Op_Null,
     AG_Op_Add,
@@ -10,8 +9,7 @@ enum AG_Op {
     AG_Op_Pow,
     AG_Op_Relu,
 };
-
-typedef struct AG_Value AG_Value;
+typedef enum AG_Op AG_Op;
 
 // NOTE: Since a single AG_Value can occur multiple times in a children list,
 //       we can't store the links of the child list in AG_Value itself 
@@ -20,7 +18,7 @@ typedef struct AG_ChildListNode AG_ChildListNode;
 struct AG_ChildListNode {
     AG_ChildListNode *next;
 
-    AG_Value *child;
+    struct AG_Value *child;
 };
 
 typedef struct AG_Value AG_Value;
@@ -38,7 +36,7 @@ struct AG_Value {
 
     union {
         F64 k; // The exponent of a AG_Op_Pow operation 
-    };
+    } op_params;
 };
 
 //
