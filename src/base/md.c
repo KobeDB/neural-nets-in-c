@@ -525,6 +525,7 @@ MD_ArenaDefaultPush(MD_ArenaDefault *arena, MD_u64 size)
         // new chunk if necessary
         if (new_pos > current->cap)
         {
+            printf("ArenaDefaultPush: allocating new chunk\n");
             MD_ArenaDefault *new_arena = 0;
             if (size > MD_DEFAULT_ARENA_VERY_BIG)
             {
@@ -542,6 +543,7 @@ MD_ArenaDefaultPush(MD_ArenaDefault *arena, MD_u64 size)
             {
                 new_arena->base_pos = current->base_pos + current->cap;
                 new_arena->prev = current;
+                arena->current = new_arena; // Update arena->current to the new chunk
                 current = new_arena;
                 pos_aligned = current->pos;
                 new_pos = pos_aligned + size;
@@ -656,14 +658,14 @@ MD_ArenaDefaultAbsorb(MD_ArenaDefault *arena, MD_ArenaDefault *sub_arena)
 #if MD_DEFAULT_SCRATCH
 
 #if !defined(MD_IMPL_ScratchCount)
-# define MD_IMPL_ScratchCount 2llu
+# define MD_IMPL_ScratchCount 4llu
 #endif
 
 #if !defined(MD_IMPL_GetScratch)
 # define MD_IMPL_GetScratch MD_GetScratchDefault
 #endif
 
-MD_THREAD_LOCAL MD_Arena *md_thread_scratch_pool[MD_IMPL_ScratchCount] = {0, 0};
+MD_THREAD_LOCAL MD_Arena *md_thread_scratch_pool[MD_IMPL_ScratchCount] = {0, 0, 0, 0};
 
 static MD_Arena*
 MD_GetScratchDefault(MD_Arena **conflicts, MD_u64 count)

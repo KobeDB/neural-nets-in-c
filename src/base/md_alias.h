@@ -2,13 +2,21 @@
 #define MD_ALIAS_H
 
 //
+// Keywords
+//
+
+#define internal      static
+#define global        static
+#define local_persist static
+
+//
 // Primitive Types
 //
 
-typedef MD_i8  S8;
-typedef MD_i16 S16;
-typedef MD_i32 S32;
-typedef MD_i64 S64;
+typedef MD_i8  I8;
+typedef MD_i16 I16;
+typedef MD_i32 I32;
+typedef MD_i64 I64;
 
 typedef MD_u8  U8;
 typedef MD_u16 U16;
@@ -63,6 +71,7 @@ typedef MD_ArenaTemp    ArenaTemp;
 #define scratch_end(scratch)    MD_ReleaseScratch(scratch)
 
 #define arena_alloc                 MD_ArenaAlloc
+#define arena_release               MD_ArenaRelease
 #define push_array(a,T,c)           MD_PushArrayZero(a,T,c)
 #define push_array_no_zero(a,T,c)   MD_PushArray(a,T,c)
 
@@ -73,9 +82,12 @@ typedef MD_ArenaTemp    ArenaTemp;
 // Linked List Macros
 //
 
-#define SLLQueuePush(f,l,n) MD_QueuePush(f,l,n)
+#define SLLQueuePush(f,l,n)            MD_QueuePush(f,l,n)
+#define SLLQueuePush_N(f,l,n,next)     MD_QueuePush_NZ(f,l,n,next,MD_CheckNull,MD_SetNull)
 #define SLLQueuePop(f,l)    MD_QueuePop(f,l)
 #define SLLStackPush(f,n)   MD_StackPush(f,n)
+
+#define DLLPushBack(f,l,n) MD_DblPushBack(f,l,n)
 
 //
 // Memory Ops
