@@ -3,13 +3,15 @@
 #include <stdio.h>
 #include <math.h>
 
-void ag_push_child(Arena *arena, AG_Value *value, AG_Value *child) {
-    AG_ChildListNode *node = push_array(arena, AG_ChildListNode, 1);
-    node->child = child;
-    MD_QueuePush(value->first_child, value->last_child, node);
-    value->child_count += 1;
+internal
+void ag_push_child(Arena *arena, AG_Value *value, AG_Value *pred) {
+    AG_PredecessorNode *node = push_array(arena, AG_PredecessorNode, 1);
+    node->value = pred;
+    SLLQueuePush(value->predecessors.first, value->predecessors.last, node);
+    value->predecessors.count += 1;
 }
 
+internal
 AG_Value *ag_source(Arena *arena, F64 value) {
     AG_Value *result = push_array(arena, AG_Value, 1);
     result->type = AG_ValueType_Source;
@@ -17,6 +19,7 @@ AG_Value *ag_source(Arena *arena, F64 value) {
     return result;
 }
 
+internal
 AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
@@ -29,6 +32,7 @@ AG_Value *ag_add(Arena *arena, AG_Value *a, AG_Value *b) {
     return result;
 }
 
+internal
 AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
@@ -41,6 +45,7 @@ AG_Value *ag_mul(Arena *arena, AG_Value *a, AG_Value *b) {
     return result;
 }
 
+internal
 AG_Value *ag_exp(Arena *arena, AG_Value *x) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
@@ -52,6 +57,7 @@ AG_Value *ag_exp(Arena *arena, AG_Value *x) {
     return result;
 }
 
+internal
 AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
     AG_Value *result = push_array(arena, AG_Value, 1);
 
@@ -64,18 +70,22 @@ AG_Value *ag_pow(Arena *arena, AG_Value *a, F64 k) {
     return result;
 }
 
+internal
 AG_Value *ag_div(Arena *arena, AG_Value *a, AG_Value *b) {
     return ag_mul(arena, a, ag_pow(arena, b, -1));
 }
 
+internal
 AG_Value *ag_neg(Arena *arena, AG_Value *a) {
     return ag_mul(arena, a, ag_source(arena, -1));
 }
 
+internal
 AG_Value *ag_sub(Arena *arena, AG_Value *a, AG_Value *b) {
     return ag_add(arena, a, ag_neg(arena, b));
 }
 
+internal
 AG_Value *ag_relu(Arena *arena, AG_Value *a) {
     AG_Value *result = push_array(arena, AG_Value, 1);
     result->type = AG_ValueType_Relu;
@@ -84,22 +94,25 @@ AG_Value *ag_relu(Arena *arena, AG_Value *a) {
     return result;
 }
 
+internal
 void ag_build_topo(Arena *arena, AG_Value *value, AG_TopoList *list) {
     if (!value->visited) {
         value->visited = 1;
 
-        for ( AG_ChildListNode *cur = value->first_child; cur != 0; cur = cur->next ) {
-            ag_build_topo(arena, cur->child, list);    
+        for ( AG_PredecessorNode *cur = value->predecessors.first; cur; cur=cur->next ) {
+            ag_build_topo(arena, cur->value, list);    
         }
 
         AG_TopoListNode *topo_node = push_array(arena, AG_TopoListNode, 1);
         topo_node->value = value;
-        MD_DblPushBack(list->first, list->last, topo_node);
+        DLLPushBack(list->first, list->last, topo_node);
     }
 }
 
+internal
 void ag_internal_backward(AG_Value *value);
 
+internal
 void ag_backward(AG_Value *value) {
     ArenaTemp scratch = scratch_begin(0,0);
 
@@ -117,6 +130,7 @@ void ag_backward(AG_Value *value) {
     scratch_end(scratch);
 }
 
+internal
 void ag_internal_backward(AG_Value *value) {
     
     switch (value->type) {
@@ -127,35 +141,35 @@ void ag_internal_backward(AG_Value *value) {
         case AG_ValueType_Source: break; // nothing to do
 
         case AG_ValueType_Add: {
-            for ( AG_ChildListNode *cur = value->first_child; cur != 0; cur = cur->next ) {
-                AG_Value *child = cur->child;
-                child->grad += value->grad;
+            for ( AG_PredecessorNode *cur = value->predecessors.first; cur != 0; cur = cur->next ) {
+                AG_Value *pred = cur->value;
+                pred->grad += value->grad;
             }
         } break;
 
         case AG_ValueType_Mul: {
-            Assert(value->child_count == 2);
+            Assert(value->predecessors.count == 2);
 
-            AG_Value *child_0 = value->first_child->child;
-            AG_Value *child_1 = value->last_child->child;
+            AG_Value *child_0 = value->predecessors.first->value;
+            AG_Value *child_1 = value->predecessors.last->value;
 
             child_0->grad += value->grad * child_1->value;
             child_1->grad += value->grad * child_0->value;
         } break;
 
         case AG_ValueType_Exp: {
-            AG_Value *child = value->first_child->child;
+            AG_Value *child = value->predecessors.first->value;
             child->grad += value->grad * value->value;
         } break;
 
         case AG_ValueType_Pow: {
-            AG_Value *child = value->first_child->child;
+            AG_Value *child = value->predecessors.first->value;
             F64 k = value->op_params.k;
             child->grad += value->grad * k * pow(child->value, k-1); 
         } break;
 
         case AG_ValueType_Relu: {
-            AG_Value *child = value->first_child->child;
+            AG_Value *child = value->predecessors.first->value;
             child->grad += value->grad * (child->value > 0);
         } break;
 
