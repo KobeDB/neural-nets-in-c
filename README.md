@@ -1,1 +1,1 @@
-# Neural Nets in Pure C
+# Neural Nets in Pure C99
