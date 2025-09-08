@@ -44,17 +44,14 @@ internal AG_ValueArray nn_neuron_get_params(Arena *arena, NN_Neuron *neuron);
 
 internal AG_Value *nn_neuron_apply(Arena *arena, NN_Neuron *neuron, AG_ValueArray x);
 
-// // ===================================
-// // Layer
+// ===================================
+// Layer
 
-// internal NN_Layer nn_make_layer_with_random_init(Arena *arena, int input_dim, int output_dim, B32 has_relu);
+internal NN_Layer nn_make_layer_with_random_init(Arena *arena, int input_dim, int output_dim, B32 has_relu);
 
-// typedef struct NN_LayerApplyResult NN_LayerApplyResult;
-// struct NN_LayerApplyResult {
-//     AG_ValueArray layer_outputs; // value ptrs array allocated on param_arena
-//     NN_ParameterList parameters; // list nodes allocated on param_arena
-// };
-// internal NN_LayerApplyResult nn_layer_apply(Arena *value_arena, Arena *param_arena, NN_Layer *layer,  AG_ValueArray x);
+internal AG_ValueArray nn_layer_apply(Arena *value_arena, Arena *array_arena, NN_Layer *layer,  AG_ValueArray x);
+
+internal AG_ValueArray nn_layer_get_params(Arena *arena, NN_Layer *layer);
 
 // // ===================================
 // // MLP

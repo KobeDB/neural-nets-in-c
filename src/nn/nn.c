@@ -67,35 +67,71 @@ AG_ValueArray nn_neuron_get_params(Arena *arena, NN_Neuron *neuron) {
     return result;
 }
 
-// internal
-// NN_Layer nn_make_layer_with_random_init(Arena *arena, int input_dim, int output_dim, B32 has_relu) {
-//     NN_Layer result = {0};
-//     result.neuron_count = output_dim;
-//     result.neurons = push_array(arena, NN_Neuron, result.neuron_count);
-//     for (int i = 0; i < result.neuron_count; ++i) {
-//         result.neurons[i] = nn_make_neuron_with_random_init(arena, input_dim, has_relu);
-//     }
-//     return result;
-// }
+// ===================================
+// Layer
 
-// internal
-// NN_LayerApplyResult nn_layer_apply(Arena *value_arena, Arena *param_arena, NN_Layer *layer, AG_ValueArray x) {
-//     NN_LayerApplyResult result = {0};
+internal
+NN_Layer nn_make_layer_with_random_init(Arena *arena, int input_dim, int output_dim, B32 has_relu) {
+    NN_Layer result = {0};
+    result.neuron_count = output_dim;
+    result.neurons = push_array(arena, NN_Neuron, result.neuron_count);
+    for (int i = 0; i < result.neuron_count; ++i) {
+        result.neurons[i] = nn_make_neuron_with_random_init(arena, input_dim, has_relu);
+    }
+    return result;
+}
 
-//     result.layer_outputs.count = layer->neuron_count;
-//     result.layer_outputs.values = push_array(param_arena, AG_Value*, result.layer_outputs.count);
+internal
+AG_ValueArray nn_layer_apply(Arena *value_arena, Arena *array_arena, NN_Layer *layer, AG_ValueArray x) {
+    AG_ValueArray result = {0};
 
-//     for (int i = 0; i < layer->neuron_count; ++i) {
-//         NN_NeuronApplyResult nresult = nn_neuron_apply(value_arena, param_arena, &layer->neurons[i], x);
+    result.count = layer->neuron_count;
+    result.values = push_array(array_arena, AG_Value*, result.count);
 
-//         result.layer_outputs.values[i] = nresult.neuron_output;
-        
-//         append_to_parameter_list(&result.parameters, &nresult.parameters);
-//     }
+    for (int i = 0; i < layer->neuron_count; ++i) {
+        result.values[i] = nn_neuron_apply(value_arena, &layer->neurons[i], x);
+    }
 
-//     return result;
-// }
+    return result;
+}
 
+internal AG_ValueArray nn_layer_get_params(Arena *arena, NN_Layer *layer) {
+    
+    ArenaTemp scratch = scratch_begin(&arena, 1);
+    
+    typedef struct NeuronParamsNode NeuronParamsNode;
+    struct NeuronParamsNode {
+        NeuronParamsNode *next;
+        AG_ValueArray params;
+    };
+
+    NeuronParamsNode *first_params = 0, *last_params = 0;
+    int total_param_count = 0;
+    for (int i = 0; i < layer->neuron_count; ++i) {
+        AG_ValueArray neuron_params = nn_neuron_get_params(scratch.arena, &layer->neurons[i]);
+        NeuronParamsNode *n = push_array(scratch.arena, NeuronParamsNode, 1);
+        n->params = neuron_params;
+        SLLQueuePush(first_params, last_params, n);
+        total_param_count += neuron_params.count;
+    }
+
+    AG_ValueArray result = {0};
+    result.count = total_param_count;
+    result.values = push_array(arena, AG_Value*, total_param_count);
+    int param_idx = 0;
+    for (NeuronParamsNode *cur = first_params; cur; cur=cur->next) {
+        for (int i = 0; i < cur->params.count; ++i) {
+            result.values[param_idx] = cur->params.values[i];
+            param_idx += 1;
+        }
+    }
+
+    scratch_end(scratch);
+    return result;
+}
+
+// // ===================================
+// // MLP
 
 // internal
 // NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count) {
