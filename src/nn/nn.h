@@ -3,9 +3,8 @@
 
 typedef struct NN_Neuron NN_Neuron;
 struct NN_Neuron {
-    F64 *weights;
-    int weight_count;
-    F64 bias;
+    AG_ValueArray weights;
+    AG_Value *bias;
     B32 has_relu;
 };
 
@@ -41,39 +40,33 @@ internal NN_Neuron nn_make_neuron_from_weights(Arena *arena, F64 *weights, int w
 
 internal NN_Neuron nn_make_neuron_with_random_init(Arena *arena, int input_dim, B32 has_relu);
 
-typedef struct NN_NeuronApplyResult NN_NeuronApplyResult;
-struct NN_NeuronApplyResult {
-    AG_Value *neuron_output;
-    NN_ParameterList parameters; // list nodes allocated on param_arena
-};
-// 
-// AG_Values are allocated on value_arena
-// parameter list is allocated on param_arena
-//
-internal NN_NeuronApplyResult nn_neuron_apply(Arena *value_arena, Arena *param_arena, NN_Neuron *neuron, AG_ValueArray x);
+internal AG_ValueArray nn_neuron_get_params(Arena *arena, NN_Neuron *neuron);
 
-// ===================================
-// Layer
+internal AG_Value *nn_neuron_apply(Arena *arena, NN_Neuron *neuron, AG_ValueArray x);
 
-internal NN_Layer nn_make_layer_with_random_init(Arena *arena, int input_dim, int output_dim, B32 has_relu);
+// // ===================================
+// // Layer
 
-typedef struct NN_LayerApplyResult NN_LayerApplyResult;
-struct NN_LayerApplyResult {
-    AG_ValueArray layer_outputs; // value ptrs array allocated on param_arena
-    NN_ParameterList parameters; // list nodes allocated on param_arena
-};
-internal NN_LayerApplyResult nn_layer_apply(Arena *value_arena, Arena *param_arena, NN_Layer *layer,  AG_ValueArray x);
+// internal NN_Layer nn_make_layer_with_random_init(Arena *arena, int input_dim, int output_dim, B32 has_relu);
 
-// ===================================
-// MLP
+// typedef struct NN_LayerApplyResult NN_LayerApplyResult;
+// struct NN_LayerApplyResult {
+//     AG_ValueArray layer_outputs; // value ptrs array allocated on param_arena
+//     NN_ParameterList parameters; // list nodes allocated on param_arena
+// };
+// internal NN_LayerApplyResult nn_layer_apply(Arena *value_arena, Arena *param_arena, NN_Layer *layer,  AG_ValueArray x);
 
-// internal NN_Layer nn_make_layer(Arena *arena, U64 input_dim, U64 output_dim, B32 has_nonlin_activation, U64 seed);
+// // ===================================
+// // MLP
 
-// internal int nn_layer_get_param_count(NN_Layer *layer);
+// internal NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count);
 
-// internal AG_ValueArray nn_layer_get_params(Arena *arena, NN_Layer *layer);
-
-// internal AG_ValueArray nn_layer_apply(Arena *arena, NN_Layer *layer, AG_ValueArray x);
+// typedef struct NN_MLPApplyResult NN_MLPApplyResult;
+// struct NN_MLPApplyResult {
+//     AG_ValueArray outputs; // final output-layer outputs, ptr-array stored on param_arena
+//     NN_ParameterList parameters; // list nodes stored on param_arena
+// };
+// internal NN_MLPApplyResult nn_mlp_apply(Arena *value_arena, Arena *param_arena, NN_MLP *mlp, AG_ValueArray x);
 
 // ============================
 // Helpers
