@@ -188,20 +188,15 @@ AG_ValueArray nn_mlp_apply(Arena *value_arena, Arena *array_arena, NN_MLP *mlp, 
     
     AG_ValueArray current_layer_output = x;
     for (int i = 0; i < mlp->layer_count; ++i) {
-        // Put the layer's AG_ValueArray on scratch, since we must *only* put
+        // Put the hidden layers's AG_ValueArray on scratch, since we must *only* put
         // the final AG_ValueArray result on array_arena. (The intermediary 
         // AG_ValueArrays aren't used, nor accessible, by the caller)
-        current_layer_output = nn_layer_apply(value_arena, scratch.arena, &mlp->layers[i], current_layer_output);
+        Arena *array_target_arena = (i == mlp->layer_count-1 ? array_arena : scratch.arena);
+        current_layer_output = nn_layer_apply(value_arena, array_target_arena, &mlp->layers[i], current_layer_output);
     }
 
-    // Copy result AG_ValueArray onto array_arena.
-    AG_ValueArray result = {0};
-    result.count = current_layer_output.count;
-    result.values = push_array(array_arena, AG_Value*, result.count);
-    ArrayCopy(result.values, current_layer_output.values, result.count);
-
     scratch_end(scratch);
-    return result;
+    return current_layer_output;
 }
 
 
