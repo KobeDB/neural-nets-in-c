@@ -130,33 +130,80 @@ internal AG_ValueArray nn_layer_get_params(Arena *arena, NN_Layer *layer) {
     return result;
 }
 
-// // ===================================
-// // MLP
+// ===================================
+// MLP
 
-// internal
-// NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count) {
-//     NN_MLP result = {0};
-//     result.layer_count = layer_count;
-//     result.layers = push_array(arena, NN_Layer, layer_count);
-//     for (int i = 0; i < layer_count; ++i) {
-//         int layer_input_dim = (i > 0 ? output_dims[i-1] : input_dim);
-//         int layer_output_dim = output_dims[i];
-//         B32 has_relu = (i != layer_count-1); // output layer has no relu
-//         result.layers[i] = nn_make_layer_with_random_init(arena, layer_input_dim, layer_output_dim, has_relu);
-//     }
-//     return result;
-// }
+internal
+NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count) {
+    NN_MLP result = {0};
+    result.layer_count = layer_count;
+    result.layers = push_array(arena, NN_Layer, layer_count);
+    for (int i = 0; i < layer_count; ++i) {
+        int layer_input_dim = (i > 0 ? output_dims[i-1] : input_dim);
+        int layer_output_dim = output_dims[i];
+        B32 has_relu = (i != layer_count-1); // output layer has no relu
+        result.layers[i] = nn_make_layer_with_random_init(arena, layer_input_dim, layer_output_dim, has_relu);
+    }
+    return result;
+}
 
-// internal
-// NN_MLPApplyResult nn_mlp_apply(Arena *value_arena, Arena *param_arena, NN_MLP *mlp, AG_ValueArray x) {
-//     NN_MLPApplyResult result = {0};
-//     result.outputs = x;
-//     for (int i = 0; i < mlp->layer_count; ++i) {
-//         NN_LayerApplyResult lresult = nn_layer_apply(value_arena, param_arena, &mlp->layers[i], result.outputs);
-//         result.outputs = lresult.layer_outputs;
-//     }
-//     return result;
-// }
+internal
+AG_ValueArray nn_mlp_get_params(Arena *arena, NN_MLP *mlp) {
+    ArenaTemp scratch = scratch_begin(&arena, 1);
+
+    typedef struct LayerParamsNode LayerParamsNode;
+    struct LayerParamsNode {
+        LayerParamsNode *next;
+        AG_ValueArray params;
+    };
+    LayerParamsNode *first_params = 0, *last_params = 0;
+    int total_param_count = 0;
+    for (int i = 0; i < mlp->layer_count; ++i) {
+        AG_ValueArray lparams = nn_layer_get_params(scratch.arena, &mlp->layers[i]);
+        total_param_count += lparams.count;
+        LayerParamsNode *n = push_array(scratch.arena, LayerParamsNode, 1);
+        n->params = lparams;
+        SLLQueuePush(first_params, last_params, n);
+    }
+
+    AG_ValueArray result = {0};
+    result.count = total_param_count;
+    result.values = push_array(arena, AG_Value*, total_param_count);
+    int result_idx = 0;
+    for (LayerParamsNode *cur = first_params; cur; cur=cur->next) {
+        for (int i = 0; i < cur->params.count; ++i) {
+            result.values[result_idx] = cur->params.values[i];
+            result_idx += 1;
+        }
+    }
+    
+    scratch_end(scratch);
+    return result;
+}
+
+internal
+AG_ValueArray nn_mlp_apply(Arena *value_arena, Arena *array_arena, NN_MLP *mlp, AG_ValueArray x) {
+    Arena *arenas[] = {value_arena, array_arena};
+    ArenaTemp scratch = scratch_begin(arenas, ArrayCount(arenas));
+    
+    AG_ValueArray current_layer_output = x;
+    for (int i = 0; i < mlp->layer_count; ++i) {
+        // Put the layer's AG_ValueArray on scratch, since we must *only* put
+        // the final AG_ValueArray result on array_arena. (The intermediary 
+        // AG_ValueArrays aren't used, nor accessible, by the caller)
+        current_layer_output = nn_layer_apply(value_arena, scratch.arena, &mlp->layers[i], current_layer_output);
+    }
+
+    // Copy result AG_ValueArray onto array_arena.
+    AG_ValueArray result = {0};
+    result.count = current_layer_output.count;
+    result.values = push_array(array_arena, AG_Value*, result.count);
+    ArrayCopy(result.values, current_layer_output.values, result.count);
+
+    scratch_end(scratch);
+    return result;
+}
+
 
 internal
 void push_parameter(Arena *arena, NN_ParameterList *list, AG_Value *param) {
@@ -176,64 +223,3 @@ void append_to_parameter_list(NN_ParameterList *list1, NN_ParameterList *list2) 
     if (list2->last) list1->last = list2->last;
     list1->count += list2->count;
 }
-
-// internal
-// NN_MLP *nn_make_mlp(Arena *arena, U64 input_dim, U64 *layer_output_dims, U64 layer_count, U64 seed) {
-//     NN_MLP *result = push_array(arena, NN_MLP, 1);
-
-//     result->layers = push_array(arena, NN_Layer*, layer_count);
-//     result->layer_count = layer_count;
-
-//     for (int i = 0; i < layer_count; ++i) {
-//         U64 layer_input_dim = ( i == 0 ? input_dim : layer_output_dims[i-1] );
-//         B32 nonlin = ( i != layer_count-1 );
-//         NN_Layer *layer = push_array(arena, NN_Layer, 1);
-//         *layer = nn_make_layer(arena, layer_input_dim, layer_output_dims[i], nonlin, seed);
-//         result->layers[i] = layer;
-//     }
-
-//     return result;
-// }
-
-// internal
-// AG_ValueArray nn_mlp_get_params(Arena *arena, NN_MLP *mlp) {
-//     AG_ValueArray result = {0};
-
-//     ArenaTemp scratch = scratch_begin(&arena, 1);
-
-//     U64 param_count = 0;
-//     for (int i = 0; i < mlp->layer_count; ++i) {
-//         param_count += nn_layer_get_param_count(mlp->layers[i]);
-//     }
-
-//     result.values = push_array(arena, AG_Value*, param_count);
-//     result.count = param_count;
-
-//     int param_i = 0;
-//     for (int layer_i = 0; layer_i < mlp->layer_count; ++layer_i) {
-//         AG_ValueArray layer_params = nn_layer_get_params(scratch.arena, mlp->layers[layer_i]);
-//         for (int i = 0; i < layer_params.count; ++i) {
-//             Assert(param_i < param_count); // Sanity check
-//             result.values[param_i] = layer_params.values[i];
-//             param_i += 1;
-//         }
-//     }
-
-//     scratch_end(scratch);
-//     return result;
-// }
-
-// internal
-// AG_ValueArray nn_mlp_apply(Arena *arena, NN_MLP *mlp, AG_ValueArray x) {
-//     Assert(mlp->layer_count > 0);
-//     Assert(mlp->layers[0]->neuron_count > 0);
-//     Assert(x.count == mlp->layers[0]->neurons[0]->weights.count);
-
-//     AG_ValueArray result = x;
-
-//     for (int i = 0; i < mlp->layer_count; ++i) {
-//         result = nn_layer_apply(arena, mlp->layers[i], result);
-//     }
-
-//     return result;
-// }

@@ -53,17 +53,16 @@ internal AG_ValueArray nn_layer_apply(Arena *value_arena, Arena *array_arena, NN
 
 internal AG_ValueArray nn_layer_get_params(Arena *arena, NN_Layer *layer);
 
-// // ===================================
-// // MLP
+// ===================================
+// MLP
 
-// internal NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count);
+internal NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count);
 
-// typedef struct NN_MLPApplyResult NN_MLPApplyResult;
-// struct NN_MLPApplyResult {
-//     AG_ValueArray outputs; // final output-layer outputs, ptr-array stored on param_arena
-//     NN_ParameterList parameters; // list nodes stored on param_arena
-// };
-// internal NN_MLPApplyResult nn_mlp_apply(Arena *value_arena, Arena *param_arena, NN_MLP *mlp, AG_ValueArray x);
+internal
+AG_ValueArray nn_mlp_get_params(Arena *arena, NN_MLP *mlp);
+
+internal
+AG_ValueArray nn_mlp_apply(Arena *value_arena, Arena *array_arena, NN_MLP *mlp, AG_ValueArray x);
 
 // ============================
 // Helpers

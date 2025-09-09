@@ -59,6 +59,24 @@ T_TestResultList test_layer(Arena *arena) {
     return test_results;
 }
 
+T_TestResultList test_mlp(Arena *arena) {
+    T_TestResultList test_results = {0};
+    ArenaTemp scratch = scratch_begin(&arena, 1);
+
+    int layer_dims[] = {4,4,6};
+    NN_MLP mlp = nn_make_mlp_with_random_init(scratch.arena, 3, layer_dims, ArrayCount(layer_dims));
+
+    F64 x_raw[] = {1,2,3};
+    AG_ValueArray x = ag_value_array_from_raw(scratch.arena, x_raw, ArrayCount(x_raw));
+
+    AG_ValueArray mlp_result = nn_mlp_apply(scratch.arena, scratch.arena, &mlp, x);
+
+    T_TestAssert(arena, &test_results, mlp_result.count == layer_dims[ArrayCount(layer_dims)-1]);
+
+    scratch_end(scratch);
+    return test_results;
+}
+
 T_TestResultList test_nn(Arena *arena) {
     T_TestResultList test_results = {0};
 
@@ -66,6 +84,7 @@ T_TestResultList test_nn(Arena *arena) {
 
     T_RunTest(arena, &test_results, test_neuron);
     T_RunTest(arena, &test_results, test_layer);
+    T_RunTest(arena, &test_results, test_mlp);
 
     scratch_end(scratch);
     return test_results;
