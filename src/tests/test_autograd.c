@@ -32,6 +32,20 @@ T_TestResultList test_backward(Arena *arena) {
         T_TestAssert(arena, &result, a->grad == 1+2*a->value);
     }
     {
+        // z = a - b
+        AG_Value *a = ag_source(scratch.arena, 10);
+        AG_Value *b = ag_source(scratch.arena, 20);
+
+        AG_Value *z = ag_sub(scratch.arena, a, b);
+
+        ag_backward(z);
+
+        T_TestAssert(arena, &result, z->grad == 1);
+        T_TestAssert(arena, &result, a->grad == 1);
+        T_TestAssert(arena, &result, b->grad == -1);
+        T_TestAssert(arena, &result, z->value == -10);
+    }
+    {
         // z = relu(a)
         AG_Value *a = ag_source(scratch.arena, 10);
 
@@ -58,6 +72,7 @@ T_TestResultList test_backward(Arena *arena) {
         AG_Value *z = ag_pow(scratch.arena, a, 3);
         ag_backward(z);
         T_TestAssert(arena, &result, a->grad == 3*a->value*a->value);
+        T_TestAssert(arena, &result, z->value == 1000);
     }
 
     scratch_end(scratch);

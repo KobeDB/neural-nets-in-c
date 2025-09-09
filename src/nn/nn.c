@@ -32,7 +32,7 @@ NN_Neuron nn_make_neuron_with_random_init(Arena *arena, int input_dim, B32 has_r
     if (!is_seeded) srand(time(0)); // TODO: this is pretty bad, needa fix later with proper seeding system to get determinism
     is_seeded = 1;
     for (int i = 0; i < input_dim; ++i) weights[i] = sample_f64_in_range(-kaiming_bound, kaiming_bound);
-    F64 bias = 0;
+    F64 bias = 0.1; // small bias to help prevent dead ReLUs
     NN_Neuron result = nn_make_neuron_from_weights(arena, weights, input_dim, bias, has_relu);
     scratch_end(scratch);
     return result;

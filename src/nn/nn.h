@@ -58,11 +58,9 @@ internal AG_ValueArray nn_layer_get_params(Arena *arena, NN_Layer *layer);
 
 internal NN_MLP nn_make_mlp_with_random_init(Arena *arena, int input_dim, int *output_dims, int layer_count);
 
-internal
-AG_ValueArray nn_mlp_get_params(Arena *arena, NN_MLP *mlp);
+internal AG_ValueArray nn_mlp_get_params(Arena *arena, NN_MLP *mlp);
 
-internal
-AG_ValueArray nn_mlp_apply(Arena *value_arena, Arena *array_arena, NN_MLP *mlp, AG_ValueArray x);
+internal AG_ValueArray nn_mlp_apply(Arena *value_arena, Arena *array_arena, NN_MLP *mlp, AG_ValueArray x);
 
 // ============================
 // Helpers
