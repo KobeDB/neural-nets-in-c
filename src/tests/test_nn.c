@@ -84,10 +84,47 @@ T_TestResultList test_conv(Arena *arena) {
     int in_channels=1, out_channels=1, kernel_size=3, stride=2, padding=1;
     B32 has_bias = 0;
     NN_Conv2D conv = nn_make_conv2d(scratch.arena, in_channels, out_channels, kernel_size, stride, padding, has_bias);
+    F64 weights_raw[] = {
+        1,2,3,
+        4,5,6,
+        7,8,9
+    };
+    conv.weights = ag_make_value_array4d_from_raw(scratch.arena, scratch.arena, weights_raw, out_channels, in_channels, kernel_size, kernel_size);
 
-    AG_ValueArray3D x = ag_push_null_value_array3d(scratch.arena, 1, 3, 3);
+    F64 x_raw[] = {
+        1,2,3,
+        4,5,6,
+        7,8,9
+    };
+    AG_ValueArray3D x = ag_make_value_array3d_from_raw(scratch.arena, scratch.arena, x_raw, 1, 3, 3);
 
-    // TODO
+    AG_ValueArray3D conv_result = nn_conv2d_apply(scratch.arena, &conv, &x);
+
+    B32 conv_result_shape_correct = conv_result.shape[0]==1 && conv_result.shape[1]==2 && conv_result.shape[2]==2;
+
+    T_TestAssert(arena, &test_results, conv_result_shape_correct);
+
+    B32 conv_result_values_correct = 0;
+
+    if (conv_result_shape_correct) {
+
+        F64 expected[] = {
+            94,  106,
+            106, 94
+        };
+        conv_result_values_correct = 1;
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                AG_Value **val = ag_value_array3d_get_value(&conv_result, 0, i, j);
+                if (expected[i*2+j] != (*val)->value) {
+                    fprintf(stderr, "conv result i:%d,j:%d incorrect: %f but expected %f\n", i, j, (*val)->value, expected[2*i+j]);
+                    conv_result_values_correct = 0;
+                }
+            }
+        }
+    }
+
+    T_TestAssert(arena, &test_results, conv_result_values_correct);
 
     scratch_end(scratch);
     return test_results;

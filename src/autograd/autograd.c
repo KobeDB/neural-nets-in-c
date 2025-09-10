@@ -249,3 +249,22 @@ AG_Value **ag_value_array4d_get_value(AG_ValueArray4D *arr, int i, int j, int k,
     }
     return &arr->values[i*arr->shape[1]*arr->shape[2]*arr->shape[3] + j*arr->shape[2]*arr->shape[3] + k*arr->shape[3] + l];
 }
+
+internal
+AG_ValueArray3D ag_make_value_array3d_from_raw(Arena *value_arena, Arena *array_arena, F64 *data, int shape0, int shape1, int shape2) {
+    AG_ValueArray3D result = ag_push_null_value_array3d(array_arena, shape0, shape1, shape2);
+    int element_count = ag_value_array3d_element_count(&result);
+    for (int i = 0; i < element_count; ++i) {
+        result.values[i] = ag_source(value_arena, data[i]);
+    }
+    return result;
+}
+
+internal AG_ValueArray4D ag_make_value_array4d_from_raw(Arena *value_arena, Arena *array_arena, F64 *data, int shape0, int shape1, int shape2, int shape3) {
+    AG_ValueArray4D result = ag_push_null_value_array4d(array_arena, shape0, shape1, shape2, shape3);
+    int element_count = ag_value_array4d_element_count(&result);
+    for (int i = 0; i < element_count; ++i) {
+        result.values[i] = ag_source(value_arena, data[i]);
+    }
+    return result;
+}

@@ -128,6 +128,9 @@ internal AG_Value **ag_value_array4d_get_value(AG_ValueArray4D *arr, int i, int 
 
 internal AG_Value **ag_value_array3d_get_value(AG_ValueArray3D *arr, int i, int j, int k);
 
+internal AG_ValueArray3D ag_make_value_array3d_from_raw(Arena *value_arena, Arena *array_arena, F64 *data, int shape0, int shape1, int shape2);
+
+internal AG_ValueArray4D ag_make_value_array4d_from_raw(Arena *value_arena, Arena *array_arena, F64 *data, int shape0, int shape1, int shape2, int shape3);
 
 // ==================================
 // Private helpers
