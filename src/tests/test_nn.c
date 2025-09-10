@@ -77,6 +77,22 @@ T_TestResultList test_mlp(Arena *arena) {
     return test_results;
 }
 
+T_TestResultList test_conv(Arena *arena) {
+    T_TestResultList test_results = {0};
+    ArenaTemp scratch = scratch_begin(&arena, 1);
+
+    int in_channels=1, out_channels=1, kernel_size=3, stride=2, padding=1;
+    B32 has_bias = 0;
+    NN_Conv2D conv = nn_make_conv2d(scratch.arena, in_channels, out_channels, kernel_size, stride, padding, has_bias);
+
+    AG_ValueArray3D x = ag_push_null_value_array3d(scratch.arena, 1, 3, 3);
+
+    // TODO
+
+    scratch_end(scratch);
+    return test_results;
+}
+
 T_TestResultList test_nn(Arena *arena) {
     T_TestResultList test_results = {0};
 
@@ -85,6 +101,7 @@ T_TestResultList test_nn(Arena *arena) {
     T_RunTest(arena, &test_results, test_neuron);
     T_RunTest(arena, &test_results, test_layer);
     T_RunTest(arena, &test_results, test_mlp);
+    T_RunTest(arena, &test_results, test_conv);
 
     scratch_end(scratch);
     return test_results;

@@ -18,10 +18,7 @@ NN_Neuron nn_make_neuron_from_weights(Arena *arena, F64 *weights, int weight_cou
     return result;
 }
 
-internal inline
-F64 sample_f64_in_range(F64 min, F64 max) {
-    return min + (max-min)*((F64)rand()/(RAND_MAX+1.0));
-}
+
 
 internal
 NN_Neuron nn_make_neuron_with_random_init(Arena *arena, int input_dim, B32 has_relu) {

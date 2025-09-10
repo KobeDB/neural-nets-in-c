@@ -2,6 +2,13 @@
 #define RANDOM_H
 
 #include <stdint.h>
+#include <stdlib.h>
+
+internal inline
+F64 sample_f64_in_range(F64 min, F64 max) {
+    return min + (max-min)*((F64)rand()/(RAND_MAX+1.0));
+}
+
 
 typedef struct {
     int is_seeded;

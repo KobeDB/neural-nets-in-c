@@ -3,13 +3,13 @@
 #include "base/md_alias.h"
 #include "testing/testing.h"
 #include "autograd/autograd.h"
-#include "nn/nn.h"
+#include "nn/nn_inc.h"
 
 // .c
 #include "base/md.c"
 #include "testing/testing.c"
 #include "autograd/autograd.c"
-#include "nn/nn.c"
+#include "nn/nn_inc.c"
 
 // test functions includes
 #include "test_autograd.c"

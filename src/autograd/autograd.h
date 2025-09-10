@@ -116,6 +116,19 @@ internal AG_ValueArray ag_value_array_from_raw(Arena *arena, F64 *values, U64 va
 
 internal AG_ValueArray ag_make_zero_value_array(Arena *arena, int count); 
 
+internal AG_ValueArray3D ag_push_null_value_array3d(Arena *arena, int dim_0, int dim_1, int dim_2);
+
+internal AG_ValueArray4D ag_push_null_value_array4d(Arena *arena, int dim_0, int dim_1, int dim_2, int dim_3);
+
+internal int ag_value_array3d_element_count(AG_ValueArray3D *x);
+
+internal int ag_value_array4d_element_count(AG_ValueArray4D *x);
+
+internal AG_Value **ag_value_array4d_get_value(AG_ValueArray4D *arr, int i, int j, int k, int l);
+
+internal AG_Value **ag_value_array3d_get_value(AG_ValueArray3D *arr, int i, int j, int k);
+
+
 // ==================================
 // Private helpers
 

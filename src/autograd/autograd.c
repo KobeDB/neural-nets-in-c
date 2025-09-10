@@ -194,3 +194,58 @@ AG_ValueArray ag_make_zero_value_array(Arena *arena, int count) {
     }
     return result;
 }
+
+internal
+AG_ValueArray3D ag_push_null_value_array3d(Arena *arena, int dim_0, int dim_1, int dim_2) {
+    AG_ValueArray3D result = {0};
+    result.shape[0] = dim_0;
+    result.shape[1] = dim_1;
+    result.shape[2] = dim_2;
+    result.values = push_array(arena, AG_Value*, result.shape[0]*result.shape[1]*result.shape[2]);
+    return result;
+}
+
+internal
+AG_ValueArray4D ag_push_null_value_array4d(Arena *arena, int dim_0, int dim_1, int dim_2, int dim_3) {
+    AG_ValueArray4D result = {0};
+    result.shape[0] = dim_0;
+    result.shape[1] = dim_1;
+    result.shape[2] = dim_2;
+    result.shape[3] = dim_3;
+    result.values = push_array(arena, AG_Value*, result.shape[0]*result.shape[1]*result.shape[2]*result.shape[3]);
+    return result;
+}
+
+internal
+int ag_value_array3d_element_count(AG_ValueArray3D *x) {
+    int result = 1;
+    for (int i = 0; i < 3; ++i) result *= x->shape[i];
+    return result;    
+}
+
+internal
+int ag_value_array4d_element_count(AG_ValueArray4D *x) {
+    int result = 1;
+    for (int i = 0; i < 4; ++i) result *= x->shape[i];
+    return result;    
+}
+
+internal
+AG_Value **ag_value_array3d_get_value(AG_ValueArray3D *arr, int i, int j, int k) {
+    return &arr->values[i*arr->shape[1]*arr->shape[2] + j*arr->shape[2] + k];
+}
+
+internal
+B32 ag_value_array4d_is_valid_index(AG_ValueArray4D *arr, int i, int j, int k, int l) {
+    return i >= 0 && j >= 0 && k >= 0 && l >= 0 
+            && i < arr->shape[0] && j < arr->shape[1] && k < arr->shape[2] && l < arr->shape[3];
+}
+
+internal
+AG_Value **ag_value_array4d_get_value(AG_ValueArray4D *arr, int i, int j, int k, int l) {
+    if (!ag_value_array4d_is_valid_index(arr, i, j, k, l)) {
+        fprintf(stderr, "get_value: invalid indices: (%d,%d,%d,%d)\n", i,j,k,l);
+        return 0;
+    }
+    return &arr->values[i*arr->shape[1]*arr->shape[2]*arr->shape[3] + j*arr->shape[2]*arr->shape[3] + k*arr->shape[3] + l];
+}
