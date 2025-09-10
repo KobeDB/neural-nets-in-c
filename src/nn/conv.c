@@ -78,3 +78,9 @@ AG_ValueArray3D nn_conv2d_apply(Arena *arena, NN_Conv2D *conv2d, AG_ValueArray3D
 
     return result;
 }
+
+internal AG_ValueArray nn_small_cnn_apply(Arena *value_arena, Arena *array_arena, NN_SmallCNN *cnn, AG_ValueArray3D *x) {
+    AG_ValueArray result = {0};
+    // TODO
+    return result;
+}
