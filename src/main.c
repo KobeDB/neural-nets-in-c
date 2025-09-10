@@ -4,11 +4,38 @@
 #include "autograd/autograd.h"
 #include "nn/nn.h"
 #include <stdio.h>
+#include <math.h>
 
 // .c
 #include "base/md.c"
 #include "autograd/autograd.c"
 #include "nn/nn.c"
+
+
+typedef struct AG_ValueArrayArray AG_ValueArrayArray;
+struct AG_ValueArrayArray {
+    AG_ValueArray *arrays;
+    int count;
+};
+
+AG_ValueArrayArray do_forward_pass(Arena *value_arena, Arena *array_arena, NN_MLP *mlp, AG_ValueArrayArray x) {
+    AG_ValueArrayArray result = {0};
+    result.count = x.count;
+    result.arrays = push_array(array_arena, AG_ValueArray, result.count);
+    for (int i = 0; i < x.count; ++i) {
+        result.arrays[i] = nn_mlp_apply(value_arena, array_arena, mlp, x.arrays[i]);
+    }
+    return result;
+}
+
+// AG_Value *mse_loss(Arena *value_arena, AG_ValueArrayArray y_true, AG_ValueArrayArray y_pred) {
+//     AG_Value *loss = ag_source(value_arena, 0);
+//     for (int i = 0; i < y_true.count; ++i) {
+//         AG_Value *error = ag_sub(value_arena, ys.values[i], y_preds.arrays[i].values[0]);
+//         AG_Value *squared_error = ag_pow(epoch_arena, error, 2);
+//         loss = ag_add(epoch_arena, loss, squared_error);
+//     }
+// }
 
 void train_mlp(void) {
 
@@ -27,9 +54,11 @@ void train_mlp(void) {
     };
     int x_count = 4;
     int x_dim = 3;
-    AG_ValueArray *xs = push_array(arena, AG_ValueArray, x_count);
+    AG_ValueArrayArray xs = {0};
+    xs.count = x_count;
+    xs.arrays = push_array(arena, AG_ValueArray, x_count);
     for (int i = 0; i < x_count; ++i) {
-        xs[i] = ag_value_array_from_raw(arena, &xs_raw[i*3], x_dim);
+        xs.arrays[i] = ag_value_array_from_raw(arena, &xs_raw[i*3], x_dim);
     }
 
     F64 ys_raw[] = {1, -1, -1, 1};
@@ -48,23 +77,18 @@ void train_mlp(void) {
         Arena *epoch_arena = scratch.arena;
         
         // forward
-        AG_ValueArray y_preds = {0};
-        y_preds.count = x_count;
-        y_preds.values = push_array(epoch_arena, AG_Value*, y_preds.count);
-        for (int i = 0; i < x_count; ++i) {
-            y_preds.values[i] = nn_mlp_apply(epoch_arena, epoch_arena, &mlp, xs[i]).values[0];
-        }
+        AG_ValueArrayArray y_preds = do_forward_pass(epoch_arena, epoch_arena, &mlp, xs);
 
         printf("y_preds: [");
         for (int i = 0; i < x_count; ++i) {
-            printf("%f ", y_preds.values[i]->value);
+            printf("%f ", y_preds.arrays[i].values[0]->value);
         }
         printf("] ");
 
         // loss
         AG_Value *loss = ag_source(epoch_arena, 0);
         for (int i = 0; i < x_count; ++i) {
-            AG_Value *error = ag_sub(epoch_arena, ys.values[i], y_preds.values[i]);
+            AG_Value *error = ag_sub(epoch_arena, ys.values[i], y_preds.arrays[i].values[0]);
             AG_Value *squared_error = ag_pow(epoch_arena, error, 2);
             loss = ag_add(epoch_arena, loss, squared_error);
         }
@@ -88,6 +112,66 @@ void train_mlp(void) {
     arena_release(arena);
 }
 
+typedef struct Dataset Dataset;
+struct Dataset {
+    F64 *X;
+    F64 *y;
+    int sample_count;
+    int x_feature_count;
+};
+
+Dataset make_moons_2d(Arena *arena, int sample_count, F64 noise) {
+    Dataset result = {0};
+    result.sample_count = sample_count;
+    int feat_count = 2;
+    result.x_feature_count = feat_count;
+    result.X = push_array(arena, F64, sample_count * feat_count);
+    result.y = push_array(arena, F64, sample_count);
+    for (int i = 0; i < sample_count; ++i) {
+        int moon = sample_f64_in_range(0,1) < 0.5 ? 0 : 1;
+        F64 pi = 3.14159265359;
+        F64 angle = sample_f64_in_range(0,pi);
+        if (moon == 1) angle += pi; // second moon == bottom half of circle
+        F64 moon_x_offset = (moon == 0 ? -0.5 : 0.5); 
+        F64 moon_y_offset = (moon == 0 ? -0.25 : 0.25);
+        F64 r = 1.0;
+        F64 sample_x = cos(angle)*r + moon_x_offset; // x1
+        F64 sample_y = sin(angle)*r + moon_y_offset; // x2
+        // add noise
+        sample_x += sample_f64_in_range(-noise*r, noise*r);
+        sample_y += sample_f64_in_range(-noise*r, noise*r);
+
+        result.X[i*feat_count + 0] = sample_x;
+        result.X[i*feat_count + 1] = sample_y;
+        result.y[i] = (F64)moon;
+    }
+    return result;
+}
+
+void write_dataset_to_file(FILE *file, Dataset *dataset) {
+    for (int i = 0; i < dataset->x_feature_count; ++i) {
+        fprintf(file, "x%d,", i);
+    }
+    fprintf(file, "y\n");
+    for (int i = 0; i < dataset->sample_count; ++i) {
+        for (int f = 0; f < dataset->x_feature_count; ++f) {
+            int x_idx = i*dataset->x_feature_count + f;
+            fprintf(file, "%f,", dataset->X[x_idx]);
+        }
+        fprintf(file, "%f\n", dataset->y[i]);
+    }
+}
+
 int main(void) {
     train_mlp();
+
+    ArenaTemp scratch = scratch_begin(0,0);
+    Dataset moons = make_moons_2d(scratch.arena, 100, 0.1);
+    FILE *out_file = fopen("/home/kobedb/Dev/rommel/moons.csv", "w");
+    if (!out_file) fprintf(stderr, "Error opening moons output file\n");
+    else {
+        write_dataset_to_file(out_file, &moons);
+        fclose(out_file);
+    }
+    scratch_end(scratch);
 }
