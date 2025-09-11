@@ -2,14 +2,14 @@
 #include "base/md.h"
 #include "base/md_alias.h"
 #include "autograd/autograd.h"
-#include "nn/nn.h"
+#include "nn/nn_inc.h"
 #include <stdio.h>
 #include <math.h>
 
 // .c
 #include "base/md.c"
 #include "autograd/autograd.c"
-#include "nn/nn.c"
+#include "nn/nn_inc.c"
 
 
 typedef struct AG_ValueArrayArray AG_ValueArrayArray;
@@ -112,6 +112,30 @@ void train_mlp(void) {
     arena_release(arena);
 }
 
+void train_small_cnn(void) {
+    Arena *arena = arena_alloc();
+
+    NN_SmallCNN cnn = nn_make_small_cnn(arena, 10);
+
+    AG_ValueArray3D x = ag_push_null_value_array3d(arena, 1, 28, 28);
+    for (int i = 0; i < ag_value_array3d_element_count(&x); ++i) {
+        x.values[i] = ag_source(arena, sample_f64_in_range(-1,1));
+    }
+
+    AG_ValueArray result = nn_small_cnn_apply(arena, arena, &cnn, &x);
+
+    for (int i = 0; i < result.count; ++i) {
+        printf("cnn result[%d]: %f\n", i, result.values[i]->value);
+    }
+    
+
+    for (int epoch = 0; epoch < 10; ++epoch) {
+
+    }
+
+    arena_release(arena);
+}
+
 typedef struct Dataset Dataset;
 struct Dataset {
     F64 *X;
@@ -164,6 +188,8 @@ void write_dataset_to_file(FILE *file, Dataset *dataset) {
 
 int main(void) {
     train_mlp();
+    
+    train_small_cnn();
 
     ArenaTemp scratch = scratch_begin(0,0);
     Dataset moons = make_moons_2d(scratch.arena, 100, 0.1);
