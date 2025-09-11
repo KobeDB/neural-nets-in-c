@@ -2,5 +2,5 @@
 
 mkdir bin
 pushd bin
-cl.exe ..\main.c -Zi
+cl.exe ..\src\main.c -I..\src -Zi /std:c11
 popd bin

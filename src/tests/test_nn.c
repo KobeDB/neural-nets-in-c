@@ -98,7 +98,7 @@ T_TestResultList test_conv(Arena *arena) {
     };
     AG_ValueArray3D x = ag_make_value_array3d_from_raw(scratch.arena, scratch.arena, x_raw, 1, 3, 3);
 
-    AG_ValueArray3D conv_result = nn_conv2d_apply(scratch.arena, &conv, &x);
+    AG_ValueArray3D conv_result = nn_conv2d_apply(scratch.arena, scratch.arena, &conv, &x);
 
     B32 conv_result_shape_correct = conv_result.shape[0]==1 && conv_result.shape[1]==2 && conv_result.shape[2]==2;
 

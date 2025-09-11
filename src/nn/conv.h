@@ -21,8 +21,14 @@ struct NN_SmallCNN {
 
 internal NN_Conv2D nn_make_conv2d(Arena *arena, int in_channels, int out_channels, int kernel_size, int stride, int padding, B32 has_bias);
 
-internal AG_ValueArray3D nn_conv2d_apply(Arena *arena, NN_Conv2D *conv2d, AG_ValueArray3D *x);
+internal AG_ValueArray3D nn_conv2d_apply(Arena *value_arena, Arena *array_arena, NN_Conv2D *conv2d, AG_ValueArray3D *x);
+
+internal NN_SmallCNN nn_make_small_cnn(Arena *arena, int num_classes);
 
 internal AG_ValueArray nn_small_cnn_apply(Arena *value_arena, Arena *array_arena, NN_SmallCNN *cnn, AG_ValueArray3D *x);
+
+internal AG_ValueArray3D nn_relu_3d(Arena *value_arena, Arena *array_arena, AG_ValueArray3D *x);
+
+internal AG_ValueArray nn_gap(Arena *value_arena, Arena *array_arena, AG_ValueArray3D *x);
 
 #endif
